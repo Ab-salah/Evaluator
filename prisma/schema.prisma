@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  FIELD_REP
+  REVIEWER
+  ADMIN
+}
+
+enum SubmissionStatus {
+  PENDING
+  SCORED
+  REVIEWED
+  FLAGGED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  role      Role     @default(FIELD_REP)
+  createdAt DateTime @default(now())
+
+  submissions      Submission[] @relation("SubmittedBy")
+  reviewedSubmissions Submission[] @relation("ReviewedBy")
+}
+
+model Shop {
+  id        String   @id @default(cuid())
+  name      String
+  code      String?  @unique
+  region    String?
+  city      String?
+  address   String?
+  createdAt DateTime @default(now())
+
+  submissions Submission[]
+}
+
+model Submission {
+  id            String           @id @default(cuid())
+  shop          Shop             @relation(fields: [shopId], references: [id])
+  shopId        String
+  submittedBy   User?            @relation("SubmittedBy", fields: [submittedById], references: [id])
+  submittedById String?
+
+  imagePath     String
+  latitude      Float?
+  longitude     Float?
+  locationLabel String?
+  capturedAt    DateTime         @default(now())
+
+  status        SubmissionStatus @default(PENDING)
+
+  // Raw AI output: per-element detected counts, reasoning, confidence.
+  aiElements    Json?
+  aiScore       Float?
+  aiSummary     String?
+
+  // Final, human-facing score. Equals aiScore until a reviewer overrides it.
+  finalElements Json?
+  finalScore    Float?
+
+  reviewedBy    User?    @relation("ReviewedBy", fields: [reviewedById], references: [id])
+  reviewedById  String?
+  reviewNotes   String?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([shopId])
+  @@index([status])
+  @@index([finalScore])
+}
