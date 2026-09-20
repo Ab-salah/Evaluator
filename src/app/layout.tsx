@@ -23,6 +23,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/submit" className="hover:text-neutral-900">
                 New submission
               </Link>
+              <Link href="/admin/matrix" className="hover:text-neutral-900">
+                Matrix
+              </Link>
             </nav>
           </div>
         </header>

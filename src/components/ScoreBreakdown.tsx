@@ -1,7 +1,13 @@
-import { computeScore, type ElementCounts, MAX_VISIBILITY_SCORE } from "@/lib/scoring";
+import { computeScore, type ElementCounts, type MatrixElementRule } from "@/lib/scoring";
 
-export function ScoreBreakdown({ counts }: { counts: Partial<ElementCounts> }) {
-  const breakdown = computeScore(counts);
+export function ScoreBreakdown({
+  counts,
+  rules,
+}: {
+  counts: ElementCounts;
+  rules: MatrixElementRule[];
+}) {
+  const breakdown = computeScore(counts, rules);
 
   return (
     <div className="rounded-lg border border-neutral-200 bg-white">
@@ -9,7 +15,7 @@ export function ScoreBreakdown({ counts }: { counts: Partial<ElementCounts> }) {
         <span className="text-sm font-medium text-neutral-500">Visibility score</span>
         <span className="text-2xl font-semibold">
           {breakdown.totalScore}
-          <span className="text-base font-normal text-neutral-400"> / {MAX_VISIBILITY_SCORE}</span>
+          <span className="text-base font-normal text-neutral-400"> / {breakdown.maxScore}</span>
         </span>
       </div>
       <ul className="divide-y divide-neutral-100">

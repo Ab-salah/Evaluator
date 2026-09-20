@@ -31,6 +31,24 @@ model User {
   reviewedSubmissions Submission[] @relation("ReviewedBy")
 }
 
+// The Visibility Matrix itself — editable in-product by the Strategy &
+// Data Analytics team under /admin/matrix. `key` is what AI detections and
+// stored submission counts key off of, so renaming it effectively starts a
+// new element (old submissions keep their originally-scored breakdown).
+model MatrixElement {
+  id            String   @id @default(cuid())
+  key           String   @unique
+  label         String
+  description   String
+  pointsPerUnit Float
+  maxUnits      Int
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([sortOrder])
+}
+
 model Shop {
   id        String   @id @default(cuid())
   name      String

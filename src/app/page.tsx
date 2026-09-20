@@ -1,7 +1,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import { prisma } from "@/lib/db";
-import { MAX_VISIBILITY_SCORE } from "@/lib/scoring";
+import { maxScoreFor } from "@/lib/scoring";
+import { getMatrixRules } from "@/lib/matrix";
 
 export const dynamic = "force-dynamic";
 
@@ -13,11 +14,15 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 export default async function Home() {
-  const submissions = await prisma.submission.findMany({
-    include: { shop: true },
-    orderBy: [{ finalScore: "desc" }, { createdAt: "desc" }],
-    take: 100,
-  });
+  const [submissions, rules] = await Promise.all([
+    prisma.submission.findMany({
+      include: { shop: true },
+      orderBy: [{ finalScore: "desc" }, { createdAt: "desc" }],
+      take: 100,
+    }),
+    getMatrixRules(),
+  ]);
+  const maxScore = maxScoreFor(rules);
 
   return (
     <div>
@@ -25,7 +30,7 @@ export default async function Home() {
         <div>
           <h1 className="text-xl font-semibold">Reseller shop rankings</h1>
           <p className="text-sm text-neutral-500">
-            Ranked by visibility score, out of {MAX_VISIBILITY_SCORE}
+            Ranked by visibility score, out of {maxScore} (current matrix)
           </p>
         </div>
         <Link

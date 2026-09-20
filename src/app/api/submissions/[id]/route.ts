@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { computeScore, ELEMENT_KEYS, type ElementCounts } from "@/lib/scoring";
+import { computeScore, type ElementCounts } from "@/lib/scoring";
+import { getMatrixRules } from "@/lib/matrix";
 
 export async function GET(
   _req: NextRequest,
@@ -28,14 +29,16 @@ export async function PATCH(
   const { id } = await params;
   const body = await req.json();
 
-  const counts = body.counts as Partial<ElementCounts> | undefined;
+  const counts = body.counts as ElementCounts | undefined;
   const reviewerEmail = String(body.reviewerEmail ?? "").trim();
   const reviewerName = String(body.reviewerName ?? "").trim();
   const reviewNotes = body.reviewNotes ? String(body.reviewNotes) : undefined;
 
-  if (!counts || !ELEMENT_KEYS.every((k) => typeof counts[k] === "number")) {
+  const rules = await getMatrixRules();
+
+  if (!counts || !rules.every((r) => typeof counts[r.key] === "number")) {
     return NextResponse.json(
-      { error: "counts must include a number for every element key" },
+      { error: "counts must include a number for every current matrix element" },
       { status: 400 },
     );
   }
@@ -49,7 +52,7 @@ export async function PATCH(
     create: { email: reviewerEmail, name: reviewerName || reviewerEmail, role: "REVIEWER" },
   });
 
-  const breakdown = computeScore(counts);
+  const breakdown = computeScore(counts, rules);
 
   const submission = await prisma.submission.update({
     where: { id },

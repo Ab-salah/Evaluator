@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { ELEMENT_KEYS, VISIBILITY_MATRIX, type ElementCounts } from "./scoring";
+import type { ElementCounts, MatrixElementRule } from "./scoring";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -12,11 +12,13 @@ export interface AiDetectionResult {
 
 const REPORT_TOOL_NAME = "report_visibility_counts";
 
-function buildSystemPrompt(): string {
-  const rows = ELEMENT_KEYS.map((key) => {
-    const rule = VISIBILITY_MATRIX[key];
-    return `- "${key}" (${rule.label}): ${rule.description} Counts up to ${rule.maxUnits} unit(s); each unit is worth ${rule.pointsPerUnit} points.`;
-  }).join("\n");
+function buildSystemPrompt(rules: MatrixElementRule[]): string {
+  const rows = rules
+    .map(
+      (rule) =>
+        `- "${rule.key}" (${rule.label}): ${rule.description} Counts up to ${rule.maxUnits} unit(s); each unit is worth ${rule.pointsPerUnit} points.`,
+    )
+    .join("\n");
 
   return `You are a field auditor for a consumer brand's indirect (reseller) channel. You inspect a single photo of a reseller shop's storefront and count how many instances of each branded visibility element are visibly present, per this matrix:
 
@@ -35,14 +37,18 @@ Call the ${REPORT_TOOL_NAME} tool exactly once with your findings.`;
 export async function detectVisibilityElements(params: {
   imageBase64: string;
   mediaType: "image/jpeg" | "image/png" | "image/webp";
+  rules: MatrixElementRule[];
 }): Promise<AiDetectionResult> {
+  const { rules } = params;
+  const keys = rules.map((r) => r.key);
+
   const countProperties = Object.fromEntries(
-    ELEMENT_KEYS.map((key) => [
-      key,
+    rules.map((rule) => [
+      rule.key,
       {
         type: "integer",
         minimum: 0,
-        description: `Number of "${VISIBILITY_MATRIX[key].label}" instances visible in the photo.`,
+        description: `Number of "${rule.label}" instances visible in the photo.`,
       },
     ]),
   );
@@ -50,7 +56,7 @@ export async function detectVisibilityElements(params: {
   const message = await client.messages.create({
     model: "claude-sonnet-5",
     max_tokens: 1024,
-    system: buildSystemPrompt(),
+    system: buildSystemPrompt(rules),
     messages: [
       {
         role: "user",
@@ -80,7 +86,7 @@ export async function detectVisibilityElements(params: {
             counts: {
               type: "object",
               properties: countProperties,
-              required: [...ELEMENT_KEYS],
+              required: keys,
               additionalProperties: false,
             },
             reasoning: {
@@ -112,7 +118,7 @@ export async function detectVisibilityElements(params: {
     confidence: "low" | "medium" | "high";
   };
 
-  const counts = ELEMENT_KEYS.reduce((acc, key) => {
+  const counts = keys.reduce((acc, key) => {
     acc[key] = Math.max(0, Math.round(input.counts?.[key] ?? 0));
     return acc;
   }, {} as ElementCounts);

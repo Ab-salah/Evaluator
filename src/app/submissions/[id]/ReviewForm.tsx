@@ -2,14 +2,16 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ELEMENT_KEYS, VISIBILITY_MATRIX, type ElementCounts } from "@/lib/scoring";
+import type { ElementCounts, MatrixElementRule } from "@/lib/scoring";
 
 export function ReviewForm({
   submissionId,
   initialCounts,
+  rules,
 }: {
   submissionId: string;
   initialCounts: ElementCounts;
+  rules: MatrixElementRule[];
 }) {
   const router = useRouter();
   const [counts, setCounts] = useState<ElementCounts>(initialCounts);
@@ -49,27 +51,24 @@ export function ReviewForm({
       </summary>
 
       <div className="mt-4 space-y-3">
-        {ELEMENT_KEYS.map((key) => {
-          const rule = VISIBILITY_MATRIX[key];
-          return (
-            <div key={key} className="flex items-center justify-between gap-3">
-              <label htmlFor={`count-${key}`} className="text-sm text-neutral-700">
-                {rule.label}
-                <span className="ml-1 text-xs text-neutral-400">(max {rule.maxUnits})</span>
-              </label>
-              <input
-                id={`count-${key}`}
-                type="number"
-                min={0}
-                value={counts[key]}
-                onChange={(e) =>
-                  setCounts((c) => ({ ...c, [key]: Math.max(0, Number(e.target.value)) }))
-                }
-                className="w-20 rounded-md border border-neutral-300 px-2 py-1 text-right text-sm"
-              />
-            </div>
-          );
-        })}
+        {rules.map((rule) => (
+          <div key={rule.key} className="flex items-center justify-between gap-3">
+            <label htmlFor={`count-${rule.key}`} className="text-sm text-neutral-700">
+              {rule.label}
+              <span className="ml-1 text-xs text-neutral-400">(max {rule.maxUnits})</span>
+            </label>
+            <input
+              id={`count-${rule.key}`}
+              type="number"
+              min={0}
+              value={counts[rule.key] ?? 0}
+              onChange={(e) =>
+                setCounts((c) => ({ ...c, [rule.key]: Math.max(0, Number(e.target.value)) }))
+              }
+              className="w-20 rounded-md border border-neutral-300 px-2 py-1 text-right text-sm"
+            />
+          </div>
+        ))}
 
         <div className="grid grid-cols-2 gap-3 border-t border-neutral-200 pt-3">
           <input

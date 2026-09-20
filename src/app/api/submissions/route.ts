@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { computeScore } from "@/lib/scoring";
+import { getMatrixRules } from "@/lib/matrix";
 import { detectVisibilityElements } from "@/lib/ai-vision";
 import { isSupportedMediaType, saveSubmissionImage } from "@/lib/storage";
 
@@ -86,11 +87,13 @@ export async function POST(req: NextRequest) {
   });
 
   try {
+    const rules = await getMatrixRules();
     const detection = await detectVisibilityElements({
       imageBase64: buffer.toString("base64"),
       mediaType,
+      rules,
     });
-    const breakdown = computeScore(detection.counts);
+    const breakdown = computeScore(detection.counts, rules);
 
     const scored = await prisma.submission.update({
       where: { id: submission.id },

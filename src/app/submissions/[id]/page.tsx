@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { ScoreBreakdown } from "@/components/ScoreBreakdown";
 import { emptyCounts, type ElementCounts } from "@/lib/scoring";
+import { getMatrixRules } from "@/lib/matrix";
 import { ReviewForm } from "./ReviewForm";
 
 export const dynamic = "force-dynamic";
@@ -19,8 +20,9 @@ export default async function SubmissionPage({
   });
   if (!submission) notFound();
 
-  const finalCounts =
-    ((submission.finalElements as { counts?: ElementCounts } | null)?.counts) ?? emptyCounts();
+  const rules = await getMatrixRules();
+  const storedCounts = (submission.finalElements as { counts?: ElementCounts } | null)?.counts;
+  const finalCounts = { ...emptyCounts(rules), ...storedCounts };
   const aiElements = submission.aiElements as {
     counts?: ElementCounts;
     reasoning?: Record<string, string>;
@@ -64,8 +66,8 @@ export default async function SubmissionPage({
       </div>
 
       <div className="space-y-6">
-        <ScoreBreakdown counts={finalCounts} />
-        <ReviewForm submissionId={submission.id} initialCounts={finalCounts} />
+        <ScoreBreakdown counts={finalCounts} rules={rules} />
+        <ReviewForm submissionId={submission.id} initialCounts={finalCounts} rules={rules} />
         {submission.reviewedBy && (
           <p className="text-xs text-neutral-500">
             Last reviewed by {submission.reviewedBy.name}
