@@ -72,6 +72,37 @@ export function computeScore(counts: ElementCounts, rules: MatrixElementRule[]):
   };
 }
 
+export type BrandShareLine = {
+  brand: string;
+  score: number;
+  sharePercent: number;
+};
+
+/**
+ * Share of visibility: the audited brand's score as a proportion of all
+ * branded visibility scored in the same photo. This is what makes an
+ * indirect-channel photo comparable across shops — an absolute score of 10
+ * means something different in a shop where rivals scored 30 than in one
+ * where they scored nothing.
+ */
+export function computeShareOfVisibility(
+  audited: { brand: string; counts: ElementCounts },
+  competitors: { brand: string; counts: ElementCounts }[],
+  rules: MatrixElementRule[],
+): BrandShareLine[] {
+  const scored = [audited, ...competitors].map((entry) => ({
+    brand: entry.brand,
+    score: computeScore(entry.counts, rules).totalScore,
+  }));
+
+  const total = scored.reduce((sum, s) => sum + s.score, 0);
+
+  return scored.map((s) => ({
+    ...s,
+    sharePercent: total > 0 ? Math.round((s.score / total) * 1000) / 10 : 0,
+  }));
+}
+
 export function emptyCounts(rules: MatrixElementRule[]): ElementCounts {
   return rules.reduce((acc, r) => {
     acc[r.key] = 0;

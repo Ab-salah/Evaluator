@@ -1,62 +1,75 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import { z } from "zod";
 import type { ElementCounts, MatrixElementRule } from "./scoring";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+export type CompetitorDetection = {
+  brand: string;
+  counts: ElementCounts;
+};
+
 export interface AiDetectionResult {
   counts: ElementCounts;
   reasoning: Record<string, string>;
+  competitors: CompetitorDetection[];
   overallSummary: string;
   confidence: "low" | "medium" | "high";
 }
 
-const REPORT_TOOL_NAME = "report_visibility_counts";
-
-function buildSystemPrompt(rules: MatrixElementRule[]): string {
+function buildSystemPrompt(rules: MatrixElementRule[], brand: string): string {
   const rows = rules
-    .map(
-      (rule) =>
-        `- "${rule.key}" (${rule.label}): ${rule.description} Counts up to ${rule.maxUnits} unit(s); each unit is worth ${rule.pointsPerUnit} points.`,
-    )
+    .map((rule) => `- "${rule.key}" (${rule.label}): ${rule.description}`)
     .join("\n");
 
-  return `You are a field auditor for a consumer brand's indirect (reseller) channel. You inspect a single photo of a reseller shop's storefront and count how many instances of each branded visibility element are visibly present, per this matrix:
+  return `You are a field auditor for an indirect (reseller) sales channel. You inspect one photo of a reseller shop and count the branded visibility elements present.
 
+You are auditing for the brand: ${brand}.
+
+Reseller shops almost always carry several competing brands at the same time — the same storefront can show one brand's signage, another's window stickers and a third's door stickers. So every element you count must be attributed to the brand that owns it, by its logo, wordmark and brand colours.
+
+The elements to count:
 ${rows}
 
 Rules:
-- Count only elements that clearly belong to the audited brand (not competitor branding).
-- Count what is physically visible in THIS photo only — do not assume elements exist off-frame.
-- If an element type does not appear at all, report a count of 0 for it.
-- Do not do any scoring or point math yourself — only report raw counts, one short reasoning note per element you counted 1+ for, and an overall one-sentence summary.
-- If the photo is too blurry, too dark, or too far away to judge an element reliably, still give your best count but reflect that in the overall confidence level.
-
-Call the ${REPORT_TOOL_NAME} tool exactly once with your findings.`;
+- In "counts", report ONLY elements belonging to ${brand}. Elements belonging to any other brand must NOT appear there.
+- In "competitors", report the other brands visible in the photo and their own element counts, using the same element keys. Omit this entirely if ${brand} is the only brand visible.
+- Count what is physically visible in THIS photo. Do not infer elements that are out of frame, and do not count the same physical element twice.
+- Judge each element on the definition above, not on how prominent the brand feels overall.
+- Report raw counts only — never points, scores or totals. Scoring happens outside this call.
+- In "reasoning", add one short note per ${brand} element you counted 1 or more of, saying what you saw and where.
+- If the photo is blurry, dark, or too distant to judge reliably, still give your best counts and set confidence to "low".`;
 }
 
 export async function detectVisibilityElements(params: {
   imageBase64: string;
   mediaType: "image/jpeg" | "image/png" | "image/webp";
   rules: MatrixElementRule[];
+  brand: string;
 }): Promise<AiDetectionResult> {
-  const { rules } = params;
-  const keys = rules.map((r) => r.key);
+  const { rules, brand } = params;
 
-  const countProperties = Object.fromEntries(
+  const countsShape = Object.fromEntries(
     rules.map((rule) => [
       rule.key,
-      {
-        type: "integer",
-        minimum: 0,
-        description: `Number of "${rule.label}" instances visible in the photo.`,
-      },
+      z.number().int().min(0).describe(`Number of "${rule.label}" instances visible.`),
     ]),
   );
+  const CountsSchema = z.object(countsShape);
 
-  const message = await client.messages.create({
-    model: "claude-sonnet-5",
-    max_tokens: 1024,
-    system: buildSystemPrompt(rules),
+  const DetectionSchema = z.object({
+    counts: CountsSchema,
+    reasoning: z.record(z.string(), z.string()),
+    competitors: z.array(z.object({ brand: z.string(), counts: CountsSchema })),
+    overall_summary: z.string(),
+    confidence: z.enum(["low", "medium", "high"]),
+  });
+
+  const response = await client.messages.parse({
+    model: "claude-opus-5",
+    max_tokens: 4096,
+    system: buildSystemPrompt(rules, brand),
     messages: [
       {
         role: "user",
@@ -71,62 +84,33 @@ export async function detectVisibilityElements(params: {
           },
           {
             type: "text",
-            text: "Inspect this reseller shop photo and report the visibility element counts.",
+            text: `Audit this reseller shop photo for ${brand} and report the visibility element counts.`,
           },
         ],
       },
     ],
-    tools: [
-      {
-        name: REPORT_TOOL_NAME,
-        description: "Report counted visibility elements for the audited photo.",
-        input_schema: {
-          type: "object",
-          properties: {
-            counts: {
-              type: "object",
-              properties: countProperties,
-              required: keys,
-              additionalProperties: false,
-            },
-            reasoning: {
-              type: "object",
-              description: "One short note per element key that was counted 1 or higher.",
-              additionalProperties: { type: "string" },
-            },
-            overall_summary: { type: "string" },
-            confidence: { type: "string", enum: ["low", "medium", "high"] },
-          },
-          required: ["counts", "overall_summary", "confidence"],
-        },
-      },
-    ],
-    tool_choice: { type: "tool", name: REPORT_TOOL_NAME },
+    output_config: { format: zodOutputFormat(DetectionSchema) },
   });
 
-  const toolUse = message.content.find(
-    (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
-  );
-  if (!toolUse) {
-    throw new Error("AI response did not include a tool call with visibility counts.");
+  const parsed = response.parsed_output;
+  if (!parsed) {
+    throw new Error("AI response could not be parsed into visibility counts.");
   }
 
-  const input = toolUse.input as {
-    counts: Record<string, number>;
-    reasoning?: Record<string, string>;
-    overall_summary: string;
-    confidence: "low" | "medium" | "high";
-  };
-
-  const counts = keys.reduce((acc, key) => {
-    acc[key] = Math.max(0, Math.round(input.counts?.[key] ?? 0));
-    return acc;
-  }, {} as ElementCounts);
+  const normalize = (raw: Record<string, number>): ElementCounts =>
+    rules.reduce((acc, rule) => {
+      acc[rule.key] = Math.max(0, Math.round(raw[rule.key] ?? 0));
+      return acc;
+    }, {} as ElementCounts);
 
   return {
-    counts,
-    reasoning: input.reasoning ?? {},
-    overallSummary: input.overall_summary,
-    confidence: input.confidence,
+    counts: normalize(parsed.counts),
+    reasoning: parsed.reasoning,
+    competitors: parsed.competitors.map((c) => ({
+      brand: c.brand,
+      counts: normalize(c.counts),
+    })),
+    overallSummary: parsed.overall_summary,
+    confidence: parsed.confidence,
   };
 }

@@ -68,6 +68,11 @@ model Submission {
   submittedBy   User?            @relation("SubmittedBy", fields: [submittedById], references: [id])
   submittedById String?
 
+  // Which brand this submission is scored FOR. Indirect-channel shops carry
+  // several competing brands at once, so a score is only meaningful next to
+  // the brand it was measured for.
+  brand         String
+
   imagePath     String
   latitude      Float?
   longitude     Float?
@@ -84,6 +89,10 @@ model Submission {
   // Final, human-facing score. Equals aiScore until a reviewer overrides it.
   finalElements Json?
   finalScore    Float?
+
+  // Other brands' visibility detected in the same photo, scored on the same
+  // matrix. Powers share-of-visibility without a second API call.
+  competitors   Json?
 
   reviewedBy    User?    @relation("ReviewedBy", fields: [reviewedById], references: [id])
   reviewedById  String?

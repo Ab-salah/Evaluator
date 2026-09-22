@@ -62,6 +62,8 @@ export default async function Home() {
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-medium">{s.shop.name}</div>
                   <div className="truncate text-xs text-neutral-500">
+                    <span className="font-medium text-neutral-600">{s.brand}</span>
+                    {" · "}
                     {[s.shop.city, s.shop.region].filter(Boolean).join(" · ") || "No location on file"}
                   </div>
                 </div>

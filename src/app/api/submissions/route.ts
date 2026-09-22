@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { computeScore } from "@/lib/scoring";
+import { computeScore, computeShareOfVisibility } from "@/lib/scoring";
 import { getMatrixRules } from "@/lib/matrix";
 import { detectVisibilityElements } from "@/lib/ai-vision";
 import { isSupportedMediaType, saveSubmissionImage } from "@/lib/storage";
@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const form = await req.formData();
 
+  const brand = String(form.get("brand") ?? "").trim();
   const shopName = String(form.get("shopName") ?? "").trim();
   const shopCode = String(form.get("shopCode") ?? "").trim() || undefined;
   const region = String(form.get("region") ?? "").trim() || undefined;
@@ -38,6 +39,12 @@ export async function POST(req: NextRequest) {
 
   const image = form.get("image");
 
+  if (!brand) {
+    return NextResponse.json(
+      { error: "brand is required — a visibility score is only meaningful for a named brand" },
+      { status: 400 },
+    );
+  }
   if (!shopName) {
     return NextResponse.json({ error: "shopName is required" }, { status: 400 });
   }
@@ -78,6 +85,7 @@ export async function POST(req: NextRequest) {
     data: {
       shopId: shop.id,
       submittedById,
+      brand,
       imagePath,
       latitude,
       longitude,
@@ -92,8 +100,14 @@ export async function POST(req: NextRequest) {
       imageBase64: buffer.toString("base64"),
       mediaType,
       rules,
+      brand,
     });
     const breakdown = computeScore(detection.counts, rules);
+    const share = computeShareOfVisibility(
+      { brand, counts: detection.counts },
+      detection.competitors,
+      rules,
+    );
 
     const scored = await prisma.submission.update({
       where: { id: submission.id },
@@ -108,6 +122,7 @@ export async function POST(req: NextRequest) {
         aiSummary: detection.overallSummary,
         finalElements: { counts: detection.counts },
         finalScore: breakdown.totalScore,
+        competitors: { detected: detection.competitors, share },
       },
       include: { shop: true, submittedBy: true },
     });
