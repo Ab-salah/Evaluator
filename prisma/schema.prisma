@@ -4,8 +4,11 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Migrations need a direct connection; Neon's pooled URL can't hold the
+  // advisory lock `prisma migrate deploy` takes.
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 enum Role {
@@ -69,11 +72,6 @@ model Submission {
   submittedBy   User?            @relation("SubmittedBy", fields: [submittedById], references: [id])
   submittedById String?
 
-  // Which brand this submission is scored FOR. Indirect-channel shops carry
-  // several competing brands at once, so a score is only meaningful next to
-  // the brand it was measured for.
-  brand         String
-
   imagePath     String
   latitude      Float?
   longitude     Float?
@@ -81,19 +79,8 @@ model Submission {
   capturedAt    DateTime         @default(now())
 
   status        SubmissionStatus @default(PENDING)
-
-  // Raw AI output: per-element detected counts, reasoning, confidence.
-  aiElements    Json?
-  aiScore       Float?
   aiSummary     String?
-
-  // Final, human-facing score. Equals aiScore until a reviewer overrides it.
-  finalElements Json?
-  finalScore    Float?
-
-  // Other brands' visibility detected in the same photo, scored on the same
-  // matrix. Powers share-of-visibility without a second API call.
-  competitors   Json?
+  aiConfidence  String?
 
   reviewedBy    User?    @relation("ReviewedBy", fields: [reviewedById], references: [id])
   reviewedById  String?
@@ -102,7 +89,30 @@ model Submission {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  brandScores   BrandScore[]
+
   @@index([shopId])
   @@index([status])
-  @@index([finalScore])
+}
+
+// One operator's visibility in one audited photo. A reseller shop carries
+// several operators' branding at once, so each photo yields one row per
+// operator found, each scored independently out of the full matrix.
+model BrandScore {
+  id           String     @id @default(cuid())
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  submissionId String
+  brand        String
+
+  // What the AI counted. Null when a reviewer added a brand the AI missed.
+  aiCounts     Json?
+  aiScore      Float?
+  reasoning    Json?
+
+  // What the score is based on. Equals the AI's counts until a reviewer corrects them.
+  finalCounts  Json
+  finalScore   Float
+
+  @@unique([submissionId, brand])
+  @@index([brand])
 }

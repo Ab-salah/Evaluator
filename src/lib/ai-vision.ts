@@ -5,41 +5,114 @@ import type { ElementCounts, MatrixElementRule } from "./scoring";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-export type CompetitorDetection = {
+type MediaType = "image/jpeg" | "image/png" | "image/webp";
+
+export type BrandDetection = {
   brand: string;
   counts: ElementCounts;
+  reasoning: Record<string, string>;
 };
 
 export interface AiDetectionResult {
-  counts: ElementCounts;
-  reasoning: Record<string, string>;
-  competitors: CompetitorDetection[];
+  brands: BrandDetection[];
   overallSummary: string;
   confidence: "low" | "medium" | "high";
 }
 
-function buildSystemPrompt(rules: MatrixElementRule[], brand: string): string {
+function buildSystemPrompt(rules: MatrixElementRule[], knownBrands: string[]): string {
   const rows = rules
     .map((rule) => `- "${rule.key}" (${rule.label}): ${rule.description}`)
     .join("\n");
+  const naming =
+    knownBrands.length > 0
+      ? `\n- Operators already on record: ${knownBrands.join(", ")}. When a brand in the photo is one of these, use exactly that spelling.`
+      : "";
 
-  return `You are a field auditor for an indirect (reseller) sales channel. You inspect one photo of a reseller shop and count the branded visibility elements present.
+  return `You are a field auditor for an indirect (reseller) sales channel. You inspect one photo of a reseller shop and score the branded visibility of every operator present.
 
-You are auditing for the brand: ${brand}.
+Reseller shops almost always carry several operators' branding at the same time — the same storefront can show one operator's signage, another's window stickers and a third's door stickers. Identify every operator whose branding is visible, and count each operator's elements separately, attributing every element to the operator that owns it by its logo, wordmark and brand colours.
 
-Reseller shops almost always carry several competing brands at the same time — the same storefront can show one brand's signage, another's window stickers and a third's door stickers. So every element you count must be attributed to the brand that owns it, by its logo, wordmark and brand colours.
-
-The elements to count:
+The elements to count, per operator:
 ${rows}
 
 Rules:
-- In "counts", report ONLY elements belonging to ${brand}. Elements belonging to any other brand must NOT appear there.
-- In "competitors", report the other brands visible in the photo and their own element counts, using the same element keys. Omit this entirely if ${brand} is the only brand visible.
-- Count what is physically visible in THIS photo. Do not infer elements that are out of frame, and do not count the same physical element twice.
-- Judge each element on the definition above, not on how prominent the brand feels overall.
+- Return one entry in "brands" per operator visible in the photo, with its own counts for every element key. Do not list an operator whose branding is not visible.
+- Count what is physically visible in THIS photo. Do not infer elements that are out of frame, and do not count the same physical element twice or for two operators.
+- Judge each element on the definition above, not on how prominent the operator feels overall.
 - Report raw counts only — never points, scores or totals. Scoring happens outside this call.
-- In "reasoning", add one short note per ${brand} element you counted 1 or more of, saying what you saw and where.
+- In each operator's "reasoning", add one short note per element counted 1 or more times, saying what you saw and where.
+- Name operators by their brand name as written on the branding (e.g. the wordmark), not the shop's own name.${naming}
 - If the photo is blurry, dark, or too distant to judge reliably, still give your best counts and set confidence to "low".`;
+}
+
+export async function detectBrandVisibility(params: {
+  imageBase64: string;
+  mediaType: MediaType;
+  rules: MatrixElementRule[];
+  knownBrands: string[];
+}): Promise<AiDetectionResult> {
+  const { rules } = params;
+
+  const CountsSchema = z.object(
+    Object.fromEntries(
+      rules.map((rule) => [
+        rule.key,
+        z.number().int().min(0).describe(`Number of "${rule.label}" instances visible.`),
+      ]),
+    ),
+  );
+
+  const DetectionSchema = z.object({
+    brands: z.array(
+      z.object({
+        brand: z.string(),
+        counts: CountsSchema,
+        reasoning: z.record(z.string(), z.string()),
+      }),
+    ),
+    overall_summary: z.string(),
+    confidence: z.enum(["low", "medium", "high"]),
+  });
+
+  const response = await client.messages.parse({
+    model: "claude-opus-5",
+    max_tokens: 8192,
+    system: buildSystemPrompt(rules, params.knownBrands),
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "image",
+            source: { type: "base64", media_type: params.mediaType, data: params.imageBase64 },
+          },
+          {
+            type: "text",
+            text: "Audit this reseller shop photo and report each operator's visibility element counts.",
+          },
+        ],
+      },
+    ],
+    output_config: { format: zodOutputFormat(DetectionSchema) },
+  });
+
+  const parsed = response.parsed_output;
+  if (!parsed) {
+    throw new Error("AI response could not be parsed into visibility counts.");
+  }
+
+  return {
+    brands: parsed.brands.map((b) => ({
+      brand: b.brand,
+      counts: rules.reduce((acc, rule) => {
+        acc[rule.key] = Math.max(0, Math.round(b.counts[rule.key] ?? 0));
+        return acc;
+      }, {} as ElementCounts),
+      reasoning: b.reasoning,
+    })),
+    overallSummary: parsed.overall_summary,
+    confidence: parsed.confidence,
+  };
 }
 
 const ShopNameSchema = z.object({
@@ -56,7 +129,7 @@ const ShopNameSchema = z.object({
  */
 export async function readShopName(params: {
   imageBase64: string;
-  mediaType: "image/jpeg" | "image/png" | "image/webp";
+  mediaType: MediaType;
 }): Promise<string | null> {
   const response = await client.messages.parse({
     model: "claude-opus-5",
@@ -80,77 +153,4 @@ export async function readShopName(params: {
 
   const name = response.parsed_output?.shop_name?.trim();
   return name ? name : null;
-}
-
-export async function detectVisibilityElements(params: {
-  imageBase64: string;
-  mediaType: "image/jpeg" | "image/png" | "image/webp";
-  rules: MatrixElementRule[];
-  brand: string;
-}): Promise<AiDetectionResult> {
-  const { rules, brand } = params;
-
-  const countsShape = Object.fromEntries(
-    rules.map((rule) => [
-      rule.key,
-      z.number().int().min(0).describe(`Number of "${rule.label}" instances visible.`),
-    ]),
-  );
-  const CountsSchema = z.object(countsShape);
-
-  const DetectionSchema = z.object({
-    counts: CountsSchema,
-    reasoning: z.record(z.string(), z.string()),
-    competitors: z.array(z.object({ brand: z.string(), counts: CountsSchema })),
-    overall_summary: z.string(),
-    confidence: z.enum(["low", "medium", "high"]),
-  });
-
-  const response = await client.messages.parse({
-    model: "claude-opus-5",
-    max_tokens: 4096,
-    system: buildSystemPrompt(rules, brand),
-    messages: [
-      {
-        role: "user",
-        content: [
-          {
-            type: "image",
-            source: {
-              type: "base64",
-              media_type: params.mediaType,
-              data: params.imageBase64,
-            },
-          },
-          {
-            type: "text",
-            text: `Audit this reseller shop photo for ${brand} and report the visibility element counts.`,
-          },
-        ],
-      },
-    ],
-    output_config: { format: zodOutputFormat(DetectionSchema) },
-  });
-
-  const parsed = response.parsed_output;
-  if (!parsed) {
-    throw new Error("AI response could not be parsed into visibility counts.");
-  }
-
-  const normalize = (raw: Record<string, number>): ElementCounts =>
-    rules.reduce((acc, rule) => {
-      acc[rule.key] = Math.max(0, Math.round(raw[rule.key] ?? 0));
-      return acc;
-    }, {} as ElementCounts);
-
-  return {
-    counts: normalize(parsed.counts),
-    reasoning: parsed.reasoning,
-    competitors: parsed.competitors.map((c) => ({
-      brand: c.brand,
-      counts: normalize(c.counts),
-    })),
-    overallSummary: parsed.overall_summary,
-    confidence: parsed.confidence,
-  };
 }

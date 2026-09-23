@@ -21,8 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <span className="hidden sm:inline">Visibility Evaluator</span>
             </Link>
             <nav className="flex gap-1 overflow-x-auto text-sm">
-              <NavLink href="/">Rankings</NavLink>
-              <NavLink href="/operators">Operators</NavLink>
+              <NavLink href="/">Dashboard</NavLink>
               <NavLink href="/submit">New audit</NavLink>
               <NavLink href="/admin/matrix">Matrix</NavLink>
             </nav>

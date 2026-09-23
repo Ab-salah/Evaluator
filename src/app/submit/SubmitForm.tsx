@@ -4,21 +4,9 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { BackLink } from "@/components/BackLink";
 import { compressImage } from "@/lib/compress-image";
+import { readJson } from "@/lib/read-json";
 
-async function readJson(res: Response) {
-  const text = await res.text();
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new Error(
-      res.status === 413
-        ? "The photo is too large to upload."
-        : `The server returned an unexpected response (${res.status}). Please try again.`,
-    );
-  }
-}
-
-export function SubmitForm({ knownBrands }: { knownBrands: string[] }) {
+export function SubmitForm() {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -124,11 +112,11 @@ export function SubmitForm({ knownBrands }: { knownBrands: string[] }) {
 
   return (
     <div className="mx-auto max-w-lg">
-      <BackLink href="/">Back to rankings</BackLink>
+      <BackLink href="/">Back to dashboard</BackLink>
       <h1 className="mb-1 text-xl font-semibold">New visibility submission</h1>
       <p className="mb-6 text-sm text-neutral-500">
-        Take a clear photo of the shop front. It will be scored automatically against the
-        visibility matrix.
+        Take a clear photo of the shop front. Every operator&apos;s branding in it — Zain, stc,
+        Batelco or any other — is found and scored separately against the visibility matrix.
       </p>
 
       <form onSubmit={onSubmit} className="space-y-5">
@@ -144,30 +132,15 @@ export function SubmitForm({ knownBrands }: { knownBrands: string[] }) {
           {preparing && <p className="mt-2 text-xs text-neutral-500">Preparing photo…</p>}
           {preview && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={preview} alt="Preview" className="mt-3 h-48 w-full rounded-md object-cover" />
+            <img
+              src={preview}
+              alt="Preview"
+              className="mt-3 max-h-[28rem] w-full rounded-md bg-neutral-100 object-contain"
+            />
           )}
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div className="col-span-2">
-            <label className="mb-1 block text-sm font-medium">Brand being audited</label>
-            <input
-              name="brand"
-              required
-              list="known-brands"
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-              placeholder="e.g. Zain"
-            />
-            <datalist id="known-brands">
-              {knownBrands.map((b) => (
-                <option key={b} value={b} />
-              ))}
-            </datalist>
-            <p className="mt-1 text-xs text-neutral-500">
-              Reseller shops carry several brands at once — the score is measured for this
-              brand, and rival brands in the same photo are captured separately.
-            </p>
-          </div>
           <div className="col-span-2">
             <label className="mb-1 block text-sm font-medium">Shop name</label>
             <input

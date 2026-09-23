@@ -1,32 +1,45 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { computeScore, computeShareOfVisibility } from "@/lib/scoring";
+import { computeScore, type ElementCounts } from "@/lib/scoring";
 import { getMatrixRules } from "@/lib/matrix";
-import { detectVisibilityElements } from "@/lib/ai-vision";
+import { canonicalBrand, getKnownBrands } from "@/lib/brands";
+import { detectBrandVisibility, type BrandDetection } from "@/lib/ai-vision";
 import { isSupportedMediaType, saveSubmissionImage } from "@/lib/storage";
 
 export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
   const shopId = req.nextUrl.searchParams.get("shopId") ?? undefined;
-  const status = req.nextUrl.searchParams.get("status") ?? undefined;
 
   const submissions = await prisma.submission.findMany({
-    where: {
-      shopId,
-      status: status ? (status as never) : undefined,
-    },
-    include: { shop: true, submittedBy: true },
-    orderBy: [{ finalScore: "desc" }, { createdAt: "desc" }],
+    where: { shopId },
+    include: { shop: true, submittedBy: true, brandScores: true },
+    orderBy: { createdAt: "desc" },
   });
 
   return NextResponse.json({ submissions });
 }
 
+// Merges entries that name the same operator once spellings are normalised.
+function mergeByBrand(detections: BrandDetection[], known: string[]): BrandDetection[] {
+  const merged = new Map<string, BrandDetection>();
+  for (const d of detections) {
+    const brand = canonicalBrand(d.brand, known);
+    const existing = merged.get(brand);
+    if (!existing) {
+      merged.set(brand, { ...d, brand });
+      continue;
+    }
+    const counts: ElementCounts = { ...existing.counts };
+    for (const [key, n] of Object.entries(d.counts)) counts[key] = (counts[key] ?? 0) + n;
+    merged.set(brand, { brand, counts, reasoning: { ...existing.reasoning, ...d.reasoning } });
+  }
+  return [...merged.values()];
+}
+
 export async function POST(req: NextRequest) {
   const form = await req.formData();
 
-  const brand = String(form.get("brand") ?? "").trim();
   const shopName = String(form.get("shopName") ?? "").trim();
   const shopCode = String(form.get("shopCode") ?? "").trim() || undefined;
   const region = String(form.get("region") ?? "").trim() || undefined;
@@ -41,12 +54,6 @@ export async function POST(req: NextRequest) {
 
   const image = form.get("image");
 
-  if (!brand) {
-    return NextResponse.json(
-      { error: "brand is required — a visibility score is only meaningful for a named brand" },
-      { status: 400 },
-    );
-  }
   if (!shopName) {
     return NextResponse.json({ error: "shopName is required" }, { status: 400 });
   }
@@ -87,7 +94,6 @@ export async function POST(req: NextRequest) {
     data: {
       shopId: shop.id,
       submittedById,
-      brand,
       imagePath,
       latitude,
       longitude,
@@ -97,39 +103,39 @@ export async function POST(req: NextRequest) {
   });
 
   try {
-    const rules = await getMatrixRules();
-    const detection = await detectVisibilityElements({
+    const [rules, knownBrands] = await Promise.all([getMatrixRules(), getKnownBrands()]);
+    const detection = await detectBrandVisibility({
       imageBase64: buffer.toString("base64"),
       mediaType,
       rules,
-      brand,
+      knownBrands,
     });
-    const breakdown = computeScore(detection.counts, rules);
-    const share = computeShareOfVisibility(
-      { brand, counts: detection.counts },
-      detection.competitors,
-      rules,
-    );
+    const brands = mergeByBrand(detection.brands, knownBrands);
 
     const scored = await prisma.submission.update({
       where: { id: submission.id },
       data: {
         status: "SCORED",
-        aiElements: {
-          counts: detection.counts,
-          reasoning: detection.reasoning,
-          confidence: detection.confidence,
-        },
-        aiScore: breakdown.totalScore,
         aiSummary: detection.overallSummary,
-        finalElements: { counts: detection.counts },
-        finalScore: breakdown.totalScore,
-        competitors: { detected: detection.competitors, share },
+        aiConfidence: detection.confidence,
+        brandScores: {
+          create: brands.map((b) => {
+            const score = computeScore(b.counts, rules).totalScore;
+            return {
+              brand: b.brand,
+              aiCounts: b.counts,
+              aiScore: score,
+              reasoning: b.reasoning,
+              finalCounts: b.counts,
+              finalScore: score,
+            };
+          }),
+        },
       },
-      include: { shop: true, submittedBy: true },
+      include: { shop: true, brandScores: true },
     });
 
-    return NextResponse.json({ submission: scored, breakdown }, { status: 201 });
+    return NextResponse.json({ submission: scored }, { status: 201 });
   } catch (err) {
     await prisma.submission.update({
       where: { id: submission.id },
