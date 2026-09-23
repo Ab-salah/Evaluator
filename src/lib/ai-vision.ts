@@ -13,10 +13,14 @@ export type BrandDetection = {
   reasoning: Record<string, string>;
 };
 
+export type SubjectiveRating = { score: number; reasoning: string };
+
 export interface AiDetectionResult {
   brands: BrandDetection[];
   overallSummary: string;
   confidence: "low" | "medium" | "high";
+  customerAppeal: SubjectiveRating;
+  industryStandard: SubjectiveRating;
 }
 
 function buildSystemPrompt(rules: MatrixElementRule[], knownBrands: string[]): string {
@@ -42,7 +46,12 @@ Rules:
 - Report raw counts only — never points, scores or totals. Scoring happens outside this call.
 - In each operator's "reasoning", add one short note per element counted 1 or more times, saying what you saw and where.
 - Name operators by their brand name as written on the branding (e.g. the wordmark), not the shop's own name.${naming}
-- If the photo is blurry, dark, or too distant to judge reliably, still give your best counts and set confidence to "low".`;
+- If the photo is blurry, dark, or too distant to judge reliably, still give your best counts and set confidence to "low".
+
+Beside the matrix count, also give two independent 1-10 ratings of the shop as a whole (not tied to any one operator):
+- "customer_appeal": if an ordinary customer walked past or into this shop, how inviting, clean, organised and trustworthy would the storefront look to them? Judge lighting, clutter, tidiness and general presentation — a shop can score low here even with heavy branding if it looks crowded or run-down, and score high with minimal branding if it looks sharp and well-kept.
+- "industry_standard": compared to well-run reseller/retail shops in this industry generally (not compared to the matrix, and not compared to other shops you've seen in this session), how does this shop's visual merchandising measure up to normal professional practice?
+For each, give the integer score and one or two sentences of reasoning grounded in what's visible in the photo.`;
 }
 
 export async function detectBrandVisibility(params: {
@@ -62,6 +71,11 @@ export async function detectBrandVisibility(params: {
     ),
   );
 
+  const RatingSchema = z.object({
+    score: z.number().int().min(1).max(10),
+    reasoning: z.string(),
+  });
+
   const DetectionSchema = z.object({
     brands: z.array(
       z.object({
@@ -72,6 +86,8 @@ export async function detectBrandVisibility(params: {
     ),
     overall_summary: z.string(),
     confidence: z.enum(["low", "medium", "high"]),
+    customer_appeal: RatingSchema,
+    industry_standard: RatingSchema,
   });
 
   const response = await client.messages.parse({
@@ -112,6 +128,8 @@ export async function detectBrandVisibility(params: {
     })),
     overallSummary: parsed.overall_summary,
     confidence: parsed.confidence,
+    customerAppeal: parsed.customer_appeal,
+    industryStandard: parsed.industry_standard,
   };
 }
 

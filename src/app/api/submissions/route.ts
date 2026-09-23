@@ -118,6 +118,10 @@ export async function POST(req: NextRequest) {
         status: "SCORED",
         aiSummary: detection.overallSummary,
         aiConfidence: detection.confidence,
+        subjectiveRatings: {
+          customerAppeal: detection.customerAppeal,
+          industryStandard: detection.industryStandard,
+        },
         brandScores: {
           create: brands.map((b) => {
             const score = computeScore(b.counts, rules).totalScore;

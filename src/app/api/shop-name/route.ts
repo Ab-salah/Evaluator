@@ -17,6 +17,12 @@ export async function POST(req: NextRequest) {
   }
 
   const buffer = Buffer.from(await image.arrayBuffer());
-  const shopName = await readShopName({ imageBase64: buffer.toString("base64"), mediaType });
-  return NextResponse.json({ shopName });
+  try {
+    const shopName = await readShopName({ imageBase64: buffer.toString("base64"), mediaType });
+    return NextResponse.json({ shopName });
+  } catch (err) {
+    // Surfaced as a distinct status so the submit form can tell "the AI
+    // service failed" apart from "the sign genuinely has no readable name".
+    return NextResponse.json({ error: (err as Error).message }, { status: 502 });
+  }
 }

@@ -2,6 +2,7 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { ScoreBreakdown } from "@/components/ScoreBreakdown";
+import { RatingsSummary } from "@/components/RatingsSummary";
 import { StatusBadge } from "@/components/StatusBadge";
 import { BackLink } from "@/components/BackLink";
 import { RawDataPanel } from "@/components/RawDataPanel";
@@ -39,6 +40,9 @@ export default async function SubmissionPage({
     .sort((a, b) => b.score - a.score);
   const share = shareOfVisibility(brands);
   const total = Math.round(brands.reduce((sum, b) => sum + b.score, 0) * 100) / 100;
+  const subjectiveRatings = submission.subjectiveRatings as
+    | { customerAppeal: { score: number; reasoning: string }; industryStandard: { score: number; reasoning: string } }
+    | null;
 
   const mapUrl =
     submission.latitude != null && submission.longitude != null
@@ -129,6 +133,8 @@ export default async function SubmissionPage({
         </div>
 
         <div className="space-y-4">
+          <RatingsSummary matrixTotal={total} matrixMax={brands.length * maxScore} ratings={subjectiveRatings} />
+
           {brands.length === 0 ? (
             <div className="rounded-xl border border-dashed border-neutral-300 bg-white p-6 text-center text-sm text-neutral-500">
               No operator branding has been scored for this photo yet. Use the reviewer form below
@@ -166,6 +172,7 @@ export default async function SubmissionPage({
               status: submission.status,
               aiSummary: submission.aiSummary,
               aiConfidence: submission.aiConfidence,
+              subjectiveRatings: submission.subjectiveRatings,
               brandScores: submission.brandScores.map((b) => ({
                 brand: b.brand,
                 aiCounts: b.aiCounts,

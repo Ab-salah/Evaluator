@@ -82,6 +82,13 @@ model Submission {
   aiSummary     String?
   aiConfidence  String?
 
+  // Two AI-judged ratings alongside the mechanical matrix score, each out
+  // of 10 with reasoning: { customerAppeal: {score,reasoning},
+  // industryStandard: {score,reasoning} }. Subjective, shop-wide (not
+  // per-operator), never editable by a reviewer — they're a second opinion
+  // to read next to the matrix score, not a number that feeds ranking.
+  subjectiveRatings Json?
+
   reviewedBy    User?    @relation("ReviewedBy", fields: [reviewedById], references: [id])
   reviewedById  String?
   reviewNotes   String?

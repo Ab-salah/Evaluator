@@ -19,7 +19,9 @@ export function SubmitForm() {
   const [editing, setEditing] = useState(false);
   const [shopName, setShopName] = useState("");
   const [nameTypedByUser, setNameTypedByUser] = useState(false);
-  const [nameStatus, setNameStatus] = useState<"idle" | "reading" | "found" | "not-found">("idle");
+  const [nameStatus, setNameStatus] = useState<"idle" | "reading" | "found" | "not-found" | "error">(
+    "idle",
+  );
   const photoVersion = useRef(0);
 
   function captureLocation() {
@@ -65,14 +67,16 @@ export function SubmitForm() {
       const res = await fetch("/api/shop-name", { method: "POST", body });
       const data = await readJson(res);
       if (version !== photoVersion.current) return;
-      if (res.ok && data.shopName) {
+      if (!res.ok) {
+        setNameStatus("error");
+      } else if (data.shopName) {
         setShopName(data.shopName);
         setNameStatus("found");
       } else {
         setNameStatus("not-found");
       }
     } catch {
-      if (version === photoVersion.current) setNameStatus("not-found");
+      if (version === photoVersion.current) setNameStatus("error");
     }
   }
 
@@ -196,6 +200,12 @@ export function SubmitForm() {
             {nameStatus === "not-found" && (
               <p className="mt-1 text-xs text-amber-700">
                 Couldn&apos;t read a name from the sign — please type it in.
+              </p>
+            )}
+            {nameStatus === "error" && (
+              <p className="mt-1 text-xs text-red-700">
+                Automatic reading failed (AI service error) — please type the shop name in. This
+                usually means scoring will fail too until it&apos;s fixed.
               </p>
             )}
           </div>

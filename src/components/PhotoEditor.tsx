@@ -5,9 +5,13 @@ import ReactCrop, { type PercentCrop } from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
 import { exportCrop, renderRotated } from "@/lib/photo";
 
-// Inset a few percent from the edges so every handle — including the
-// top/bottom ones — starts clear of the image border and is easy to grab
-// on a touchscreen, instead of sitting exactly on it.
+const FULL: PercentCrop = { unit: "%", x: 0, y: 0, width: 100, height: 100 };
+// The selection shown by default is inset a few percent from the edges so
+// every handle — including the top/bottom ones — starts clear of the image
+// border and is easy to grab on a touchscreen. But if the rep never
+// actually drags a handle, "Use photo" must still export the FULL photo,
+// not this inset default — otherwise every untouched submission silently
+// loses a sliver around the edges.
 const DEFAULT_CROP: PercentCrop = { unit: "%", x: 3, y: 3, width: 94, height: 94 };
 
 export function PhotoEditor({
@@ -22,6 +26,7 @@ export function PhotoEditor({
   const [turns, setTurns] = useState(0);
   const [rendered, setRendered] = useState<{ file: File; turns: number; url: string } | null>(null);
   const [crop, setCrop] = useState<PercentCrop>(DEFAULT_CROP);
+  const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -35,6 +40,7 @@ export function PhotoEditor({
         made = u;
         setRendered({ file, turns, url: u });
         setCrop(DEFAULT_CROP);
+        setTouched(false);
       })
       .catch((err: Error) => setError(err.message));
     return () => {
@@ -51,7 +57,9 @@ export function PhotoEditor({
     setBusy(true);
     setError(null);
     try {
-      onDone(await exportCrop(imgRef.current, crop));
+      // Only export the inset selection once the rep has actually dragged a
+      // handle — an untouched crop means "use the whole photo."
+      onDone(await exportCrop(imgRef.current, touched ? crop : FULL));
     } catch (err) {
       setError((err as Error).message);
       setBusy(false);
@@ -83,7 +91,15 @@ export function PhotoEditor({
 
       <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-4">
         {url ? (
-          <ReactCrop crop={crop} onChange={(_, percent) => setCrop(percent)} keepSelection ruleOfThirds>
+          <ReactCrop
+            crop={crop}
+            onChange={(_, percent) => {
+              setCrop(percent);
+              setTouched(true);
+            }}
+            keepSelection
+            ruleOfThirds
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               ref={imgRef}
@@ -116,8 +132,11 @@ export function PhotoEditor({
         </button>
         <button
           type="button"
-          onClick={() => setCrop(DEFAULT_CROP)}
-          disabled={isDefault}
+          onClick={() => {
+            setCrop(DEFAULT_CROP);
+            setTouched(false);
+          }}
+          disabled={isDefault && !touched}
           className="rounded-lg bg-white/10 px-3 py-2 hover:bg-white/20 disabled:opacity-40"
         >
           Reset crop
