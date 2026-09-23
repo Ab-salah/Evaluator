@@ -239,7 +239,7 @@ export default async function Dashboard({
             <Link
               href="/"
               className={`rounded-full px-3 py-1 text-xs font-medium ${
-                !filter ? "bg-brand-900 text-white" : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+                !filter ? "bg-brand-700 text-white" : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
               }`}
             >
               All operators (total)
@@ -250,7 +250,7 @@ export default async function Dashboard({
                 href={`/?brand=${encodeURIComponent(o.brand)}`}
                 className={`rounded-full px-3 py-1 text-xs font-medium ${
                   filter === o.brand
-                    ? "bg-brand-900 text-white"
+                    ? "bg-brand-700 text-white"
                     : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
                 }`}
               >
@@ -293,7 +293,7 @@ export default async function Dashboard({
                     </div>
                   </div>
                   <div className="shrink-0 text-right">
-                    <div className="font-mono text-xl font-semibold text-brand-900">{s.rankScore}</div>
+                    <div className="font-mono text-xl font-semibold text-brand-700">{s.rankScore}</div>
                     <div className="text-[11px] text-neutral-400">
                       {filter ? `${filter} / ${maxScore}` : "total"}
                     </div>
