@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { BackLink } from "@/components/BackLink";
-import { compressImage } from "@/lib/compress-image";
+import { PhotoEditor } from "@/components/PhotoEditor";
 import { readJson } from "@/lib/read-json";
 
 export function SubmitForm() {
@@ -14,7 +14,9 @@ export function SubmitForm() {
   const [locating, setLocating] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [photo, setPhoto] = useState<File | null>(null);
-  const [preparing, setPreparing] = useState(false);
+  // The photo as picked, kept so it can be re-cropped from the original.
+  const [original, setOriginal] = useState<File | null>(null);
+  const [editing, setEditing] = useState(false);
   const [shopName, setShopName] = useState("");
   const [nameTypedByUser, setNameTypedByUser] = useState(false);
   const [nameStatus, setNameStatus] = useState<"idle" | "reading" | "found" | "not-found">("idle");
@@ -39,32 +41,26 @@ export function SubmitForm() {
     );
   }
 
-  async function onImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    const version = ++photoVersion.current;
-    setError(null);
-    setPhoto(null);
-    setPreview(null);
+    e.target.value = "";
     if (!file) return;
+    setError(null);
+    setOriginal(file);
+    setEditing(true);
+  }
 
-    setPreparing(true);
-    let compressed: File;
-    try {
-      compressed = await compressImage(file);
-    } catch (err) {
-      setError((err as Error).message);
-      setPreparing(false);
-      return;
-    }
-    if (version !== photoVersion.current) return;
-    setPhoto(compressed);
-    setPreview(URL.createObjectURL(compressed));
-    setPreparing(false);
+  async function onEdited(edited: File) {
+    const version = ++photoVersion.current;
+    setEditing(false);
+    setPhoto(edited);
+    if (preview) URL.revokeObjectURL(preview);
+    setPreview(URL.createObjectURL(edited));
 
     if (nameTypedByUser) return;
     setNameStatus("reading");
     const body = new FormData();
-    body.set("image", compressed);
+    body.set("image", edited);
     try {
       const res = await fetch("/api/shop-name", { method: "POST", body });
       const data = await readJson(res);
@@ -121,22 +117,53 @@ export function SubmitForm() {
 
       <form onSubmit={onSubmit} className="space-y-5">
         <div>
-          <label className="mb-1 block text-sm font-medium">Shop photo</label>
-          <input
-            type="file"
-            accept="image/*"
-            capture="environment"
-            onChange={onImageChange}
-            className="block w-full rounded-md border border-neutral-300 bg-white text-sm file:mr-3 file:rounded-md file:border-0 file:bg-neutral-900 file:px-3 file:py-2 file:text-white"
-          />
-          {preparing && <p className="mt-2 text-xs text-neutral-500">Preparing photo…</p>}
-          {preview && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={preview}
-              alt="Preview"
-              className="mt-3 max-h-[28rem] w-full rounded-md bg-neutral-100 object-contain"
-            />
+          <span className="mb-1 block text-sm font-medium">Shop photo</span>
+          {preview ? (
+            <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={preview}
+                alt="Shop photo"
+                className="max-h-[28rem] w-full bg-neutral-100 object-contain"
+              />
+              <div className="flex divide-x divide-neutral-200 border-t border-neutral-200 text-sm font-medium">
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  className="flex-1 py-2.5 hover:bg-neutral-50"
+                >
+                  Edit / crop
+                </button>
+                <label className="flex-1 cursor-pointer py-2.5 text-center hover:bg-neutral-50">
+                  Replace
+                  <input type="file" accept="image/*" onChange={onPick} className="hidden" />
+                </label>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <label className="flex cursor-pointer flex-col items-center gap-1 rounded-xl border-2 border-dashed border-neutral-300 bg-white px-3 py-6 text-center hover:border-neutral-400 hover:bg-neutral-50">
+                <svg aria-hidden viewBox="0 0 24 24" className="h-7 w-7 text-neutral-500" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z" /><circle cx="12" cy="13" r="3.5" /></svg>
+                <span className="text-sm font-medium">Take photo</span>
+                <span className="text-xs text-neutral-500">Use the camera</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={onPick}
+                  className="hidden"
+                />
+              </label>
+              <label className="flex cursor-pointer flex-col items-center gap-1 rounded-xl border-2 border-dashed border-neutral-300 bg-white px-3 py-6 text-center hover:border-neutral-400 hover:bg-neutral-50">
+                <svg aria-hidden viewBox="0 0 24 24" className="h-7 w-7 text-neutral-500" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 16V4m0 0L7 9m5-5 5 5" /><path d="M4 15v4h16v-4" /></svg>
+                <span className="text-sm font-medium">Upload photo</span>
+                <span className="text-xs text-neutral-500">From gallery or files</span>
+                <input type="file" accept="image/*" onChange={onPick} className="hidden" />
+              </label>
+            </div>
+          )}
+          {editing && original && (
+            <PhotoEditor file={original} onDone={onEdited} onCancel={() => setEditing(false)} />
           )}
         </div>
 
@@ -243,7 +270,7 @@ export function SubmitForm() {
 
         <button
           type="submit"
-          disabled={submitting || preparing}
+          disabled={submitting}
           className="flex w-full items-center justify-center gap-2 rounded-md bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-60"
         >
           {submitting && (
