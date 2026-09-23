@@ -1,7 +1,22 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { BackLink } from "@/components/BackLink";
+import { compressImage } from "@/lib/compress-image";
+
+async function readJson(res: Response) {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(
+      res.status === 413
+        ? "The photo is too large to upload."
+        : `The server returned an unexpected response (${res.status}). Please try again.`,
+    );
+  }
+}
 
 export function SubmitForm({ knownBrands }: { knownBrands: string[] }) {
   const router = useRouter();
@@ -10,6 +25,12 @@ export function SubmitForm({ knownBrands }: { knownBrands: string[] }) {
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [preparing, setPreparing] = useState(false);
+  const [shopName, setShopName] = useState("");
+  const [nameTypedByUser, setNameTypedByUser] = useState(false);
+  const [nameStatus, setNameStatus] = useState<"idle" | "reading" | "found" | "not-found">("idle");
+  const photoVersion = useRef(0);
 
   function captureLocation() {
     if (!("geolocation" in navigator)) {
@@ -30,32 +51,67 @@ export function SubmitForm({ knownBrands }: { knownBrands: string[] }) {
     );
   }
 
-  function onImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function onImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file) return setPreview(null);
-    setPreview(URL.createObjectURL(file));
+    const version = ++photoVersion.current;
+    setError(null);
+    setPhoto(null);
+    setPreview(null);
+    if (!file) return;
+
+    setPreparing(true);
+    let compressed: File;
+    try {
+      compressed = await compressImage(file);
+    } catch (err) {
+      setError((err as Error).message);
+      setPreparing(false);
+      return;
+    }
+    if (version !== photoVersion.current) return;
+    setPhoto(compressed);
+    setPreview(URL.createObjectURL(compressed));
+    setPreparing(false);
+
+    if (nameTypedByUser) return;
+    setNameStatus("reading");
+    const body = new FormData();
+    body.set("image", compressed);
+    try {
+      const res = await fetch("/api/shop-name", { method: "POST", body });
+      const data = await readJson(res);
+      if (version !== photoVersion.current) return;
+      if (res.ok && data.shopName) {
+        setShopName(data.shopName);
+        setNameStatus("found");
+      } else {
+        setNameStatus("not-found");
+      }
+    } catch {
+      if (version === photoVersion.current) setNameStatus("not-found");
+    }
   }
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
 
-    const form = e.currentTarget;
-    const formData = new FormData(form);
+    if (!photo) {
+      setError("Add a photo of the shop front before submitting.");
+      return;
+    }
+
+    const formData = new FormData(e.currentTarget);
+    formData.set("image", photo);
     if (coords) {
       formData.set("latitude", String(coords.lat));
       formData.set("longitude", String(coords.lng));
     }
 
-    if (!(formData.get("image") as File)?.size) {
-      setError("Add a photo of the shop front before submitting.");
-      return;
-    }
-
     setSubmitting(true);
     try {
       const res = await fetch("/api/submissions", { method: "POST", body: formData });
-      const data = await res.json();
+      const data = await readJson(res);
       if (res.status >= 400) {
         throw new Error(data.error ?? "Submission failed");
       }
@@ -68,6 +124,7 @@ export function SubmitForm({ knownBrands }: { knownBrands: string[] }) {
 
   return (
     <div className="mx-auto max-w-lg">
+      <BackLink href="/">Back to rankings</BackLink>
       <h1 className="mb-1 text-xl font-semibold">New visibility submission</h1>
       <p className="mb-6 text-sm text-neutral-500">
         Take a clear photo of the shop front. It will be scored automatically against the
@@ -79,13 +136,12 @@ export function SubmitForm({ knownBrands }: { knownBrands: string[] }) {
           <label className="mb-1 block text-sm font-medium">Shop photo</label>
           <input
             type="file"
-            name="image"
             accept="image/*"
             capture="environment"
-            required
             onChange={onImageChange}
             className="block w-full rounded-md border border-neutral-300 bg-white text-sm file:mr-3 file:rounded-md file:border-0 file:bg-neutral-900 file:px-3 file:py-2 file:text-white"
           />
+          {preparing && <p className="mt-2 text-xs text-neutral-500">Preparing photo…</p>}
           {preview && (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={preview} alt="Preview" className="mt-3 h-48 w-full rounded-md object-cover" />
@@ -117,9 +173,31 @@ export function SubmitForm({ knownBrands }: { knownBrands: string[] }) {
             <input
               name="shopName"
               required
+              value={shopName}
+              onChange={(e) => {
+                setShopName(e.target.value);
+                setNameTypedByUser(e.target.value.trim() !== "");
+                setNameStatus("idle");
+              }}
               className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-              placeholder="e.g. Al Noor Mobiles"
+              placeholder={nameStatus === "reading" ? "Reading the shop's sign…" : "e.g. Al Noor Mobiles"}
             />
+            {nameStatus === "reading" && (
+              <p className="mt-1 flex items-center gap-1.5 text-xs text-neutral-500">
+                <span className="h-3 w-3 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-600" />
+                Reading the shop name from the photo…
+              </p>
+            )}
+            {nameStatus === "found" && (
+              <p className="mt-1 text-xs text-emerald-700">
+                Read from the shop&apos;s sign — edit it if it&apos;s wrong.
+              </p>
+            )}
+            {nameStatus === "not-found" && (
+              <p className="mt-1 text-xs text-amber-700">
+                Couldn&apos;t read a name from the sign — please type it in.
+              </p>
+            )}
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium">Shop code (optional)</label>
@@ -186,15 +264,25 @@ export function SubmitForm({ knownBrands }: { knownBrands: string[] }) {
           </div>
         </div>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && (
+          <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+        )}
 
         <button
           type="submit"
-          disabled={submitting}
-          className="w-full rounded-md bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
+          disabled={submitting || preparing}
+          className="flex w-full items-center justify-center gap-2 rounded-md bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-60"
         >
+          {submitting && (
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+          )}
           {submitting ? "Scoring photo…" : "Submit for scoring"}
         </button>
+        {submitting && (
+          <p className="text-center text-xs text-neutral-400">
+            Analyzing the photo against the visibility matrix — this can take a few seconds.
+          </p>
+        )}
       </form>
     </div>
   );

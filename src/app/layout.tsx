@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { NavLink } from "@/components/NavLink";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -11,21 +12,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="min-h-screen bg-neutral-50 text-neutral-900 antialiased">
-        <header className="sticky top-0 z-10 border-b border-neutral-200 bg-white">
-          <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-            <Link href="/" className="font-semibold tracking-tight">
-              Visibility Evaluator
+        <header className="sticky top-0 z-10 border-b border-neutral-200 bg-white/90 backdrop-blur">
+          <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
+            <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
+              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-neutral-900 text-sm text-white">
+                V
+              </span>
+              <span className="hidden sm:inline">Visibility Evaluator</span>
             </Link>
-            <nav className="flex gap-4 text-sm font-medium text-neutral-600">
-              <Link href="/" className="hover:text-neutral-900">
-                Rankings
-              </Link>
-              <Link href="/submit" className="hover:text-neutral-900">
-                New submission
-              </Link>
-              <Link href="/admin/matrix" className="hover:text-neutral-900">
-                Matrix
-              </Link>
+            <nav className="flex gap-1 overflow-x-auto text-sm">
+              <NavLink href="/">Rankings</NavLink>
+              <NavLink href="/operators">Operators</NavLink>
+              <NavLink href="/submit">New audit</NavLink>
+              <NavLink href="/admin/matrix">Matrix</NavLink>
             </nav>
           </div>
         </header>

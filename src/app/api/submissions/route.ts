@@ -5,6 +5,8 @@ import { getMatrixRules } from "@/lib/matrix";
 import { detectVisibilityElements } from "@/lib/ai-vision";
 import { isSupportedMediaType, saveSubmissionImage } from "@/lib/storage";
 
+export const maxDuration = 60;
+
 export async function GET(req: NextRequest) {
   const shopId = req.nextUrl.searchParams.get("shopId") ?? undefined;
   const status = req.nextUrl.searchParams.get("status") ?? undefined;
