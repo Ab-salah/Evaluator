@@ -1,8 +1,5 @@
 import { randomUUID } from "crypto";
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
-
-const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
+import { put } from "@vercel/blob";
 
 const EXT_BY_MIME = {
   "image/jpeg": "jpg",
@@ -17,15 +14,19 @@ export function isSupportedMediaType(mime: string): mime is SupportedMediaType {
 }
 
 /**
- * Saves an uploaded photo to /public/uploads and returns the public URL path
- * (e.g. "/uploads/xyz.jpg") to store on the submission record.
+ * Uploads a submitted photo to Vercel Blob storage and returns its public
+ * URL to store on the submission record. Blob storage (not local disk) is
+ * required because the app runs on serverless functions with no persistent
+ * filesystem between requests.
  */
 export async function saveSubmissionImage(
   buffer: Buffer,
   mediaType: SupportedMediaType,
 ): Promise<string> {
-  await mkdir(UPLOAD_DIR, { recursive: true });
-  const filename = `${randomUUID()}.${EXT_BY_MIME[mediaType]}`;
-  await writeFile(path.join(UPLOAD_DIR, filename), buffer);
-  return `/uploads/${filename}`;
+  const filename = `submissions/${randomUUID()}.${EXT_BY_MIME[mediaType]}`;
+  const blob = await put(filename, buffer, {
+    access: "public",
+    contentType: mediaType,
+  });
+  return blob.url;
 }

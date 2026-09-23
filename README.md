@@ -16,20 +16,29 @@ turns those counts into points.
 | Signage | 10 | 1 | 10 |
 | Full stickers | 7 | 2 | 14 |
 | Generic posters | 2.5 | 3 | 7.5 |
-| Stripes | 1 | 3 | 3 |
+| Strips | 1 | 3 | 3 |
 | Approved reseller | 0.5 | 1 | 0.5 |
 | Push/Pull | 0.25 | 1 | 0.25 |
 | **Max achievable score** | | | **35.25** |
 
+Elements, labels, points-per-unit and caps are editable in-product at
+`/admin/matrix` — not just in this table — so the Strategy & Data Analytics
+team can tune the matrix without a code change.
+
 ## How it works
 
-1. **Submit** (`/submit`) — a rep uploads/takes a shop-front photo, tags the
-   shop and captures GPS location from the browser.
-2. **Score** (`POST /api/submissions`) — the photo is sent to a Claude
-   vision call (`src/lib/ai-vision.ts`) that returns raw per-element counts
-   plus a short reasoning note and confidence level. `src/lib/scoring.ts`
-   applies the matrix's points-per-unit and caps to produce the score — the
-   model never does the arithmetic itself.
+1. **Submit** (`/submit`) — a rep names the **brand being audited**,
+   uploads/takes a shop-front photo, tags the shop and captures GPS
+   location from the browser. Brand matters because a reseller shop usually
+   carries several competing brands' branding in the same photo.
+2. **Score** (`POST /api/submissions`) — the photo goes to a Claude vision
+   call (`src/lib/ai-vision.ts`) that attributes each detected element to
+   the brand that owns it, returning raw counts for the audited brand plus
+   any competitor brands visible in frame. `src/lib/scoring.ts` applies the
+   matrix's points-per-unit and caps to produce the score — the model never
+   does the arithmetic itself — and computes **share of visibility**: the
+   audited brand's score as a percentage of all branded visibility in the
+   photo.
 3. **Rank** (`/`) — all submissions are listed ranked by score, with status
    (`PENDING` → `SCORED` → `REVIEWED`, or `FLAGGED` if AI scoring failed).
 4. **Review** (`/submissions/[id]`) — a reviewer can see the AI's per-element
@@ -42,20 +51,41 @@ turns those counts into points.
 
 - Next.js (App Router) + TypeScript + Tailwind — single deployable app,
   server-rendered pages, API routes for scoring/review.
-- Prisma + SQLite for storage (swap `DATABASE_URL` to Postgres for
-  production — the schema is provider-agnostic).
+- Prisma + Postgres for storage.
+- Vercel Blob for photo storage (serverless functions have no persistent
+  filesystem, so photos can't live on local disk in production).
 - Anthropic API (Claude, vision) for element detection.
-- Photos are stored under `public/uploads` (swap for S3/blob storage before
-  production — local disk doesn't survive serverless deploys).
+
+## Deploying (Vercel, no local setup required)
+
+1. On vercel.com, **Add New Project** → import this GitHub repo → pick the
+   branch.
+2. In the project's **Storage** tab, click **Create Database** → Postgres
+   (Neon). This sets `DATABASE_URL` automatically.
+3. Still in **Storage**, click **Create Database** → Blob. This sets
+   `BLOB_READ_WRITE_TOKEN` automatically.
+4. In **Settings → Environment Variables**, add `ANTHROPIC_API_KEY` with a
+   real key.
+5. Deploy. Then open the project's **Storage → Postgres → Query** tab (or
+   run `npx prisma db push` once from a machine with the `DATABASE_URL`) to
+   create the tables — a fresh Postgres database has none yet.
+
+Once deployed, redeploys are automatic on every push to the branch — no
+local install, ever.
 
 ## Running locally
 
 ```bash
 npm install
-cp .env.example .env   # add a real ANTHROPIC_API_KEY
-npx prisma db push     # creates prisma/dev.db
+cp .env.example .env   # fill in DATABASE_URL, ANTHROPIC_API_KEY, BLOB_READ_WRITE_TOKEN
+npx prisma db push
 npm run dev
 ```
+
+`DATABASE_URL` needs a real Postgres connection string (a free one from
+[neon.tech](https://neon.tech) works, or pull the one from your deployed
+Vercel project's Storage tab). `BLOB_READ_WRITE_TOKEN` likewise comes from
+the Vercel project's Blob store settings.
 
 Open http://localhost:3000/submit to create a submission, and
 http://localhost:3000/ for the ranking.
@@ -64,9 +94,6 @@ http://localhost:3000/ for the ranking.
 
 - **Auth** — anyone with the URL can submit or review. Fine for an internal
   pilot; add real auth (e.g. SSO) before wider rollout.
-- **Object storage** — photos live on local disk, which does not survive a
-  serverless redeploy. Fine for a single always-on server; move to S3/Blob
-  before deploying to Vercel or similar.
 - **Shop/rep management UI** — shops and users are created implicitly from
   submission form input. A dedicated admin screen can come once the pilot
   validates the scoring flow.
