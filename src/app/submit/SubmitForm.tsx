@@ -271,7 +271,7 @@ export function SubmitForm() {
         <button
           type="submit"
           disabled={submitting}
-          className="flex w-full items-center justify-center gap-2 rounded-md bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-60"
+          className="flex w-full items-center justify-center gap-2 rounded-md bg-brand-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-800 disabled:opacity-60"
         >
           {submitting && (
             <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />

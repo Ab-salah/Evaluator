@@ -9,12 +9,28 @@ import { StatusBadge } from "@/components/StatusBadge";
 
 export const dynamic = "force-dynamic";
 
-function Kpi({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
+function Kpi({
+  label,
+  value,
+  hint,
+  accent,
+}: {
+  label: string;
+  value: string | number;
+  hint?: string;
+  accent?: boolean;
+}) {
   return (
-    <div className="rounded-xl border border-neutral-200 bg-white p-4">
-      <div className="text-xs font-medium text-neutral-500">{label}</div>
+    <div
+      className={`rounded-xl border p-4 ${
+        accent ? "border-gold-500/40 bg-gradient-to-br from-brand-900 to-brand-700 text-white" : "border-neutral-200 bg-white"
+      }`}
+    >
+      <div className={`text-xs font-medium ${accent ? "text-brand-100" : "text-neutral-500"}`}>{label}</div>
       <div className="mt-1 truncate text-2xl font-semibold tracking-tight">{value}</div>
-      {hint && <div className="mt-0.5 truncate text-xs text-neutral-400">{hint}</div>}
+      {hint && (
+        <div className={`mt-0.5 truncate text-xs ${accent ? "text-brand-100/80" : "text-neutral-400"}`}>{hint}</div>
+      )}
     </div>
   );
 }
@@ -33,6 +49,7 @@ export default async function Dashboard({
   const maxScore = maxScoreFor(rules);
   const colors = brandColors(knownBrands);
   const leader = data.operators[0];
+  const selected = filter ? data.operators.find((o) => o.brand === filter) : undefined;
 
   const ranked = filter
     ? data.shops
@@ -40,6 +57,25 @@ export default async function Dashboard({
         .filter((s): s is typeof s & { rankScore: number } => s.rankScore !== undefined)
         .sort((a, b) => b.rankScore - a.rankScore)
     : data.shops.map((s) => ({ ...s, rankScore: s.total })).sort((a, b) => b.total - a.total);
+
+  // What's dragging the selected operator's score down: each matrix element's
+  // average points earned vs. its cap, worst gap first.
+  const gaps = selected
+    ? rules
+        .map((rule) => {
+          const avgUnits = Math.min(selected.avgCounts[rule.key] ?? 0, rule.maxUnits);
+          const avgPoints = Math.round(avgUnits * rule.pointsPerUnit * 100) / 100;
+          const cappedMax = Math.round(rule.pointsPerUnit * rule.maxUnits * 100) / 100;
+          return {
+            label: rule.label,
+            avgPoints,
+            cappedMax,
+            gap: Math.round((cappedMax - avgPoints) * 100) / 100,
+            pct: cappedMax > 0 ? Math.round((avgPoints / cappedMax) * 100) : 100,
+          };
+        })
+        .sort((a, b) => b.gap - a.gap)
+    : [];
 
   if (data.totalAudits === 0) {
     return (
@@ -51,7 +87,7 @@ export default async function Dashboard({
         </p>
         <Link
           href="/submit"
-          className="mt-5 inline-block rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
+          className="mt-5 inline-block rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800"
         >
           Start the first audit
         </Link>
@@ -63,14 +99,14 @@ export default async function Dashboard({
     <div className="space-y-6">
       <div className="flex items-end justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold">Dashboard</h1>
+          <h1 className="text-xl font-semibold text-brand-950">Dashboard</h1>
           <p className="text-sm text-neutral-500">
             Each operator is scored out of {maxScore} per shop, on the current matrix.
           </p>
         </div>
         <Link
           href="/submit"
-          className="shrink-0 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
+          className="shrink-0 rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800"
         >
           New audit
         </Link>
@@ -79,15 +115,12 @@ export default async function Dashboard({
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Kpi label="Shops audited" value={data.shops.length} />
         <Kpi label="Total audits" value={data.totalAudits} />
+        <Kpi label="Average score" value={data.avgScore} hint={`out of ${maxScore} per shop`} />
         <Kpi
           label="Leading operator"
           value={leader?.brand ?? "—"}
           hint={leader ? `avg ${leader.avgScore} / ${maxScore}` : undefined}
-        />
-        <Kpi
-          label="Top shop"
-          value={data.shops.length ? [...data.shops].sort((a, b) => b.total - a.total)[0].shopName : "—"}
-          hint="most total branding"
+          accent
         />
       </div>
 
@@ -116,10 +149,11 @@ export default async function Dashboard({
       {data.operators.length > 0 && (
         <section className="rounded-xl border border-neutral-200 bg-white">
           <div className="border-b border-neutral-100 px-4 py-3">
-            <h2 className="font-semibold">Operator standings</h2>
+            <h2 className="font-semibold text-brand-950">Operator standings</h2>
             <p className="text-xs text-neutral-500">
               Average score per shop across all {data.shops.length} audited shops (a shop without
-              the operator counts as 0). Click an operator to rank shops by it.
+              the operator counts as 0). Click an operator to rank shops by it and see where it
+              loses the most points.
             </p>
           </div>
           <ol className="divide-y divide-neutral-100">
@@ -129,12 +163,18 @@ export default async function Dashboard({
                 <li key={o.brand}>
                   <Link
                     href={filter === o.brand ? "/" : `/?brand=${encodeURIComponent(o.brand)}`}
-                    className={`block px-4 py-3 transition-colors hover:bg-neutral-50 ${
-                      filter === o.brand ? "bg-neutral-50" : ""
+                    className={`block px-4 py-3 transition-colors hover:bg-brand-50 ${
+                      filter === o.brand ? "bg-brand-50" : ""
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <span className="w-5 text-sm font-semibold text-neutral-400">{i + 1}</span>
+                      <span
+                        className={`flex w-5 items-center justify-center text-sm font-semibold ${
+                          i === 0 ? "text-gold-600" : "text-neutral-400"
+                        }`}
+                      >
+                        {i === 0 ? "★" : i + 1}
+                      </span>
                       <span className="flex-1 font-medium">{o.brand}</span>
                       <span className="font-mono text-lg font-semibold">{o.avgScore}</span>
                       <span className="text-xs text-neutral-400">/ {maxScore}</span>
@@ -158,14 +198,48 @@ export default async function Dashboard({
         </section>
       )}
 
+      {selected && gaps.length > 0 && (
+        <section className="rounded-xl border border-neutral-200 bg-white">
+          <div className="border-b border-neutral-100 px-4 py-3">
+            <h2 className="font-semibold text-brand-950">
+              Where {selected.brand} is losing points
+            </h2>
+            <p className="text-xs text-neutral-500">
+              Average points earned per element vs. its cap, across the {selected.presentIn} shop
+              {selected.presentIn === 1 ? "" : "s"} carrying {selected.brand} — worst gap first.
+            </p>
+          </div>
+          <ul className="divide-y divide-neutral-100">
+            {gaps.map((g) => (
+              <li key={g.label} className="px-4 py-2.5">
+                <div className="flex items-center justify-between text-sm">
+                  <span className={g.gap > 0 ? "font-medium text-neutral-800" : "text-neutral-400"}>
+                    {g.label}
+                  </span>
+                  <span className="font-mono text-neutral-600">
+                    {g.avgPoints} <span className="text-neutral-400">/ {g.cappedMax}</span>
+                  </span>
+                </div>
+                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-neutral-100">
+                  <div
+                    className={g.pct < 40 ? "h-full rounded-full bg-red-500" : "h-full rounded-full bg-brand-500"}
+                    style={{ width: `${g.pct}%` }}
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <section className="rounded-xl border border-neutral-200 bg-white">
         <div className="border-b border-neutral-100 px-4 py-3">
-          <h2 className="font-semibold">Top reseller shops</h2>
+          <h2 className="font-semibold text-brand-950">Top reseller shops</h2>
           <div className="mt-2 flex flex-wrap gap-1.5">
             <Link
               href="/"
               className={`rounded-full px-3 py-1 text-xs font-medium ${
-                !filter ? "bg-neutral-900 text-white" : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+                !filter ? "bg-brand-900 text-white" : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
               }`}
             >
               All operators (total)
@@ -176,7 +250,7 @@ export default async function Dashboard({
                 href={`/?brand=${encodeURIComponent(o.brand)}`}
                 className={`rounded-full px-3 py-1 text-xs font-medium ${
                   filter === o.brand
-                    ? "bg-neutral-900 text-white"
+                    ? "bg-brand-900 text-white"
                     : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
                 }`}
               >
@@ -196,7 +270,7 @@ export default async function Dashboard({
               <li key={s.shopId}>
                 <Link
                   href={`/submissions/${s.submissionId}`}
-                  className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-neutral-50"
+                  className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-brand-50"
                 >
                   <span className="w-5 text-sm font-semibold text-neutral-400">{i + 1}</span>
                   <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-neutral-100">
@@ -219,7 +293,7 @@ export default async function Dashboard({
                     </div>
                   </div>
                   <div className="shrink-0 text-right">
-                    <div className="font-mono text-xl font-semibold">{s.rankScore}</div>
+                    <div className="font-mono text-xl font-semibold text-brand-900">{s.rankScore}</div>
                     <div className="text-[11px] text-neutral-400">
                       {filter ? `${filter} / ${maxScore}` : "total"}
                     </div>

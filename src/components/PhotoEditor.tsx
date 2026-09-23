@@ -5,7 +5,10 @@ import ReactCrop, { type PercentCrop } from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
 import { exportCrop, renderRotated } from "@/lib/photo";
 
-const FULL: PercentCrop = { unit: "%", x: 0, y: 0, width: 100, height: 100 };
+// Inset a few percent from the edges so every handle — including the
+// top/bottom ones — starts clear of the image border and is easy to grab
+// on a touchscreen, instead of sitting exactly on it.
+const DEFAULT_CROP: PercentCrop = { unit: "%", x: 3, y: 3, width: 94, height: 94 };
 
 export function PhotoEditor({
   file,
@@ -18,7 +21,7 @@ export function PhotoEditor({
 }) {
   const [turns, setTurns] = useState(0);
   const [rendered, setRendered] = useState<{ file: File; turns: number; url: string } | null>(null);
-  const [crop, setCrop] = useState<PercentCrop>(FULL);
+  const [crop, setCrop] = useState<PercentCrop>(DEFAULT_CROP);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -31,7 +34,7 @@ export function PhotoEditor({
         if (cancelled) return URL.revokeObjectURL(u);
         made = u;
         setRendered({ file, turns, url: u });
-        setCrop(FULL);
+        setCrop(DEFAULT_CROP);
       })
       .catch((err: Error) => setError(err.message));
     return () => {
@@ -55,7 +58,11 @@ export function PhotoEditor({
     }
   }
 
-  const isFull = crop.x === 0 && crop.y === 0 && crop.width === 100 && crop.height === 100;
+  const isDefault =
+    crop.x === DEFAULT_CROP.x &&
+    crop.y === DEFAULT_CROP.y &&
+    crop.width === DEFAULT_CROP.width &&
+    crop.height === DEFAULT_CROP.height;
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-neutral-950 text-white">
@@ -109,8 +116,8 @@ export function PhotoEditor({
         </button>
         <button
           type="button"
-          onClick={() => setCrop(FULL)}
-          disabled={isFull}
+          onClick={() => setCrop(DEFAULT_CROP)}
+          disabled={isDefault}
           className="rounded-lg bg-white/10 px-3 py-2 hover:bg-white/20 disabled:opacity-40"
         >
           Reset crop

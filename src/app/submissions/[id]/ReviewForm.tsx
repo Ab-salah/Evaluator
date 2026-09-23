@@ -184,7 +184,7 @@ export function ReviewForm({
         <button
           onClick={onSave}
           disabled={saving}
-          className="w-full rounded-lg bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
+          className="w-full rounded-lg bg-brand-700 px-3 py-2 text-sm font-medium text-white hover:bg-brand-800 disabled:opacity-50"
         >
           {saving ? "Saving…" : "Save correction"}
         </button>

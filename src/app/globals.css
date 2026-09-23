@@ -10,6 +10,19 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Brand palette, from the company's own slide deck. */
+  --color-brand-950: #00204f;
+  --color-brand-900: #00348a;
+  --color-brand-800: #0d4aa8;
+  --color-brand-700: #1c74cf;
+  --color-brand-500: #4a8bcf;
+  --color-brand-300: #6fc7ea;
+  --color-brand-100: #eaf3fd;
+  --color-brand-50: #f4f8fe;
+  --color-gold-600: #c99a13;
+  --color-gold-500: #f4c32a;
+  --color-gold-100: #fff3c8;
 }
 
 @media (prefers-color-scheme: dark) {

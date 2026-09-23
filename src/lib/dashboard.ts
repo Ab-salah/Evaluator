@@ -1,4 +1,5 @@
 import { prisma } from "./db";
+import type { ElementCounts } from "./scoring";
 
 export type ShopRow = {
   shopId: string;
@@ -17,12 +18,17 @@ export type OperatorRow = {
   avgScore: number;
   presentIn: number;
   bestShop: { name: string; score: number };
+  worstShop: { name: string; score: number };
+  // Average count per matrix element, over shops that carry this operator
+  // (not the whole shop list) — the basis for "what needs the most work".
+  avgCounts: ElementCounts;
 };
 
 export type DashboardData = {
   shops: ShopRow[];
   operators: OperatorRow[];
   totalAudits: number;
+  avgScore: number;
   awaitingReview: { id: string; shopName: string; status: string; capturedAt: Date }[];
 };
 
@@ -70,6 +76,9 @@ export async function getDashboardData(): Promise<DashboardData> {
     };
   });
 
+  const brandScoreByShop = new Map<string, (typeof scored)[number]["brandScores"]>();
+  for (const s of latestPerShop.values()) brandScoreByShop.set(s.shopId, s.brandScores);
+
   const brandNames = [...new Set(shops.flatMap((s) => s.brands.map((b) => b.brand)))];
   const operators: OperatorRow[] = brandNames
     .map((brand) => {
@@ -77,6 +86,16 @@ export async function getDashboardData(): Promise<DashboardData> {
         .map((s) => ({ name: s.shopName, score: s.brands.find((b) => b.brand === brand)?.score }))
         .filter((s): s is { name: string; score: number } => s.score !== undefined);
       const best = carrying.reduce((a, b) => (b.score > a.score ? b : a));
+      const worst = carrying.reduce((a, b) => (b.score < a.score ? b : a));
+
+      const countsList = [...brandScoreByShop.values()]
+        .map((rows) => rows.find((r) => r.brand === brand)?.finalCounts as ElementCounts | undefined)
+        .filter((c): c is ElementCounts => c !== undefined);
+      const keys = [...new Set(countsList.flatMap((c) => Object.keys(c)))];
+      const avgCounts = Object.fromEntries(
+        keys.map((k) => [k, round(countsList.reduce((sum, c) => sum + (c[k] ?? 0), 0) / countsList.length)]),
+      );
+
       return {
         brand,
         // Averaged over every audited shop, counting shops without the brand
@@ -84,14 +103,21 @@ export async function getDashboardData(): Promise<DashboardData> {
         avgScore: round(carrying.reduce((sum, s) => sum + s.score, 0) / shops.length),
         presentIn: carrying.length,
         bestShop: best,
+        worstShop: worst,
+        avgCounts,
       };
     })
     .sort((a, b) => b.avgScore - a.avgScore);
+
+  const avgScore = shops.length
+    ? round(shops.reduce((sum, s) => sum + s.total, 0) / shops.length)
+    : 0;
 
   return {
     shops,
     operators,
     totalAudits,
+    avgScore,
     awaitingReview: awaitingReview.map((s) => ({
       id: s.id,
       shopName: s.shop.name,

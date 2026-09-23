@@ -146,7 +146,7 @@ export function MatrixEditor({ initialRules }: { initialRules: MatrixElementRule
                     type="button"
                     onClick={() => saveRow(rule.id)}
                     disabled={!rule.dirty || rule.saving}
-                    className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+                    className="rounded-md bg-brand-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-800 disabled:opacity-40"
                   >
                     {rule.saving ? "Saving…" : "Save"}
                   </button>
@@ -210,7 +210,7 @@ export function MatrixEditor({ initialRules }: { initialRules: MatrixElementRule
           <button
             type="submit"
             disabled={adding}
-            className="ml-auto rounded-md bg-neutral-900 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+            className="ml-auto rounded-md bg-brand-700 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-800 disabled:opacity-50"
           >
             {adding ? "Adding…" : "Add element"}
           </button>
