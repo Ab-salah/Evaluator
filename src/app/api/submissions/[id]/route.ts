@@ -1,88 +1,64 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
+import { apiUser } from "@/lib/auth";
 import { computeScore, type ElementCounts } from "@/lib/scoring";
 import { getMatrixRules } from "@/lib/matrix";
 import { canonicalBrand, getKnownBrands } from "@/lib/brands";
-import { readBody } from "@/lib/read-body";
+import { deleteSubmissionImage } from "@/lib/storage";
+import { bad, readBody } from "@/lib/http";
 
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+/** Status for the audit page to poll while AI scoring runs. */
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await apiUser();
+  if (auth.error) return auth.error;
   const { id } = await params;
   const submission = await prisma.submission.findUnique({
     where: { id },
-    include: { shop: true, submittedBy: true, reviewedBy: true, brandScores: true },
+    select: { id: true, status: true, submittedById: true, updatedAt: true },
   });
-  if (!submission) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!submission || (auth.user.role !== "ADMIN" && submission.submittedById !== auth.user.id)) {
+    return bad("Not found", 404);
   }
-  return NextResponse.json({ submission });
+  return Response.json({ status: submission.status, updatedAt: submission.updatedAt });
 }
 
 /**
- * Reviewer correction: replaces the set of operators and their counts that
- * the final scores are based on. The AI's own counts (aiCounts/aiScore) on
- * rows it created are left untouched as an audit trail.
+ * Admin correction / manual scoring: replaces the set of operators and their
+ * counts that the final scores are based on. The AI's own counts
+ * (aiCounts/aiScore) on rows it created are kept as an audit trail.
  */
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await apiUser("ADMIN");
+  if (auth.error) return auth.error;
   const { id } = await params;
   const body = await readBody(req);
-  if (!body) {
-    return NextResponse.json({ error: "Request body must be a JSON object" }, { status: 400 });
-  }
+  if (!body) return bad("Request body must be a JSON object");
 
-  const reviewerEmail = String(body.reviewerEmail ?? "").trim();
-  const reviewerName = String(body.reviewerName ?? "").trim();
-  const reviewNotes = body.reviewNotes ? String(body.reviewNotes) : undefined;
+  const reviewNotes = typeof body.reviewNotes === "string" && body.reviewNotes.trim() ? body.reviewNotes.trim() : null;
+  const shopName = typeof body.shopName === "string" ? body.shopName.trim() : undefined;
   const input = body.brands as { brand: string; counts: ElementCounts }[] | undefined;
-
-  if (!reviewerEmail) {
-    return NextResponse.json({ error: "reviewerEmail is required" }, { status: 400 });
-  }
-  if (!Array.isArray(input)) {
-    return NextResponse.json({ error: "brands must be a list" }, { status: 400 });
-  }
+  if (!Array.isArray(input)) return bad("brands must be a list");
 
   const [rules, knownBrands] = await Promise.all([getMatrixRules(), getKnownBrands()]);
   const brands = new Map<string, ElementCounts>();
   for (const entry of input) {
-    const name = String(entry.brand ?? "").trim();
-    if (!name) {
-      return NextResponse.json({ error: "Every operator needs a name" }, { status: 400 });
-    }
+    const name = String(entry?.brand ?? "").trim();
+    if (!name) return bad("Every operator needs a name");
     const counts = entry.counts as Record<string, unknown> | undefined;
     if (!rules.every((r) => Number.isInteger(counts?.[r.key]) && (counts?.[r.key] as number) >= 0)) {
-      return NextResponse.json(
-        { error: `Counts for ${name} must include a whole number of 0 or more for every matrix element` },
-        { status: 400 },
-      );
+      return bad(`Counts for ${name} must include a whole number of 0 or more for every matrix element`);
     }
     const brand = canonicalBrand(name, knownBrands);
-    if (brands.has(brand)) {
-      return NextResponse.json({ error: `${brand} is listed twice` }, { status: 400 });
-    }
-    brands.set(brand, entry.counts);
+    if (brands.has(brand)) return bad(`${brand} is listed twice`);
+    brands.set(brand, Object.fromEntries(rules.map((r) => [r.key, counts![r.key] as number])));
   }
 
-  const exists = await prisma.submission.findUnique({ where: { id }, select: { id: true } });
-  if (!exists) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
+  const existing = await prisma.submission.findUnique({ where: { id }, select: { shopId: true, aiSummary: true } });
+  if (!existing) return bad("Not found", 404);
+  const failedNote = existing.aiSummary?.startsWith("AI scoring failed") ?? false;
 
-  const reviewer = await prisma.user.upsert({
-    where: { email: reviewerEmail },
-    update: {},
-    create: { email: reviewerEmail, name: reviewerName || reviewerEmail, role: "REVIEWER" },
-  });
-
-  const submission = await prisma.$transaction(async (tx) => {
-    await tx.brandScore.deleteMany({
-      where: { submissionId: id, brand: { notIn: [...brands.keys()] } },
-    });
+  await prisma.$transaction(async (tx) => {
+    await tx.brandScore.deleteMany({ where: { submissionId: id, brand: { notIn: [...brands.keys()] } } });
     for (const [brand, counts] of brands) {
       const finalScore = computeScore(counts, rules).totalScore;
       await tx.brandScore.upsert({
@@ -91,12 +67,37 @@ export async function PATCH(
         create: { submissionId: id, brand, finalCounts: counts, finalScore },
       });
     }
-    return tx.submission.update({
+    if (shopName) await tx.shop.update({ where: { id: existing.shopId }, data: { name: shopName } });
+    await tx.submission.update({
       where: { id },
-      data: { status: "REVIEWED", reviewedById: reviewer.id, reviewNotes },
-      include: { shop: true, brandScores: true, reviewedBy: true },
+      data: {
+        status: "REVIEWED",
+        reviewedById: auth.user.id,
+        reviewedAt: new Date(),
+        reviewNotes,
+        // A failure note is moot once an admin has scored the photo.
+        ...(failedNote ? { aiSummary: null } : {}),
+      },
     });
   });
 
-  return NextResponse.json({ submission });
+  return Response.json({ ok: true });
+}
+
+/** Admin: delete an audit (e.g. a duplicate or a wrong photo). */
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await apiUser("ADMIN");
+  if (auth.error) return auth.error;
+  const { id } = await params;
+  const submission = await prisma.submission.findUnique({
+    where: { id },
+    select: { imagePath: true, shopId: true, shop: { select: { _count: { select: { submissions: true } } } } },
+  });
+  if (!submission) return bad("Not found", 404);
+
+  await prisma.submission.delete({ where: { id } });
+  // Drop the shop too when this was its only audit, so it leaves the rankings.
+  if (submission.shop._count.submissions <= 1) await prisma.shop.delete({ where: { id: submission.shopId } }).catch(() => {});
+  await deleteSubmissionImage(submission.imagePath).catch((e) => console.error("[delete] photo cleanup failed:", e));
+  return Response.json({ ok: true });
 }

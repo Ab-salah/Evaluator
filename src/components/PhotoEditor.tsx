@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import ReactCrop, { type PercentCrop } from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
 import { exportCrop, renderRotated } from "@/lib/photo";
@@ -72,8 +73,10 @@ export function PhotoEditor({
     crop.width === DEFAULT_CROP.width &&
     crop.height === DEFAULT_CROP.height;
 
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-neutral-950 text-white">
+  // Portalled to <body> so no ancestor transform or overflow can trap the
+  // full-screen editor inside a card.
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex flex-col bg-neutral-950 pt-[env(safe-area-inset-top)] text-white">
       <div className="flex items-center justify-between px-4 py-3">
         <button type="button" onClick={onCancel} className="text-sm text-neutral-300 hover:text-white">
           Cancel
@@ -83,7 +86,7 @@ export function PhotoEditor({
           type="button"
           onClick={usePhoto}
           disabled={!url || busy}
-          className="rounded-lg bg-white px-3 py-1.5 text-sm font-semibold text-neutral-900 disabled:opacity-50"
+          className="rounded-xl bg-zain-lime px-4 py-2 text-sm font-extrabold text-brand-950 disabled:opacity-50"
         >
           {busy ? "Saving…" : "Use photo"}
         </button>
@@ -119,14 +122,14 @@ export function PhotoEditor({
         <button
           type="button"
           onClick={() => setTurns((t) => t - 1)}
-          className="rounded-lg bg-white/10 px-3 py-2 hover:bg-white/20"
+          className="rounded-xl bg-white/10 px-3.5 py-2.5 font-bold hover:bg-white/20"
         >
           ⟲ Rotate left
         </button>
         <button
           type="button"
           onClick={() => setTurns((t) => t + 1)}
-          className="rounded-lg bg-white/10 px-3 py-2 hover:bg-white/20"
+          className="rounded-xl bg-white/10 px-3.5 py-2.5 font-bold hover:bg-white/20"
         >
           ⟳ Rotate right
         </button>
@@ -137,7 +140,7 @@ export function PhotoEditor({
             setTouched(false);
           }}
           disabled={isDefault && !touched}
-          className="rounded-lg bg-white/10 px-3 py-2 hover:bg-white/20 disabled:opacity-40"
+          className="rounded-xl bg-white/10 px-3.5 py-2.5 font-bold hover:bg-white/20 disabled:opacity-40"
         >
           Reset crop
         </button>
@@ -145,6 +148,7 @@ export function PhotoEditor({
       <p className="pb-4 text-center text-xs text-neutral-400">
         Drag the corners to crop to the shop front.
       </p>
-    </div>
+    </div>,
+    document.body,
   );
 }

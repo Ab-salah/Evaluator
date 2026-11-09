@@ -96,22 +96,22 @@ export function MatrixEditor({ initialRules }: { initialRules: MatrixElementRule
 
   return (
     <div className="space-y-6">
-      <div className="rounded-lg border border-neutral-200 bg-white">
-        <div className="flex items-baseline justify-between border-b border-neutral-200 px-4 py-3">
-          <span className="text-sm font-medium text-neutral-500">Max achievable score</span>
-          <span className="text-lg font-semibold">{maxScore}</span>
+      <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+        <div className="flex items-center justify-between bg-midnight px-5 py-4 text-white">
+          <span className="text-sm font-bold text-white/80">Max achievable score per operator</span>
+          <span className="text-2xl font-extrabold text-zain-lime">{maxScore}</span>
         </div>
 
         <ul className="divide-y divide-neutral-100">
           {rules.map((rule) => (
-            <li key={rule.id} className="space-y-2 px-4 py-3">
+            <li key={rule.id} className="space-y-2.5 px-5 py-4">
               <div className="flex items-center gap-2">
                 <input
                   value={rule.label}
                   onChange={(e) => updateField(rule.id, "label", e.target.value)}
-                  className="flex-1 rounded-md border border-neutral-300 px-2 py-1.5 text-sm font-medium"
+                  className="flex-1 rounded-xl border border-neutral-200 px-3 py-2 text-[15px] font-bold text-brand-950 outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100"
                 />
-                <code className="shrink-0 rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-500">
+                <code className="shrink-0 rounded-lg bg-canvas px-2 py-1 text-xs text-neutral-500">
                   {rule.key}
                 </code>
               </div>
@@ -119,11 +119,11 @@ export function MatrixEditor({ initialRules }: { initialRules: MatrixElementRule
                 value={rule.description}
                 onChange={(e) => updateField(rule.id, "description", e.target.value)}
                 rows={2}
-                className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-xs text-neutral-600"
+                className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm text-neutral-600 outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100"
                 placeholder="Description used to brief the AI detector"
               />
               <div className="flex flex-wrap items-center gap-3 text-sm">
-                <label className="flex items-center gap-1.5">
+                <label className="flex items-center gap-1.5 font-bold text-brand-950">
                   Points / unit
                   <input
                     type="number"
@@ -131,10 +131,10 @@ export function MatrixEditor({ initialRules }: { initialRules: MatrixElementRule
                     min="0"
                     value={rule.pointsPerUnit}
                     onChange={(e) => updateField(rule.id, "pointsPerUnit", Number(e.target.value))}
-                    className="w-20 rounded-md border border-neutral-300 px-2 py-1"
+                    className="w-20 rounded-xl border border-neutral-200 px-2.5 py-1.5 text-right font-bold outline-none focus:border-brand-500"
                   />
                 </label>
-                <label className="flex items-center gap-1.5">
+                <label className="flex items-center gap-1.5 font-bold text-brand-950">
                   Max units
                   <input
                     type="number"
@@ -142,7 +142,7 @@ export function MatrixEditor({ initialRules }: { initialRules: MatrixElementRule
                     min="1"
                     value={rule.maxUnits}
                     onChange={(e) => updateField(rule.id, "maxUnits", Number(e.target.value))}
-                    className="w-16 rounded-md border border-neutral-300 px-2 py-1"
+                    className="w-20 rounded-xl border border-neutral-200 px-2.5 py-1.5 text-right font-bold outline-none focus:border-brand-500"
                   />
                 </label>
                 <span className="text-neutral-400">
@@ -153,39 +153,39 @@ export function MatrixEditor({ initialRules }: { initialRules: MatrixElementRule
                     type="button"
                     onClick={() => saveRow(rule.id)}
                     disabled={!rule.dirty || rule.saving}
-                    className="rounded-md bg-brand-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-800 disabled:opacity-40"
+                    className="rounded-xl bg-brand-700 px-4 py-2 text-sm font-bold text-white hover:bg-brand-800 disabled:opacity-30"
                   >
                     {rule.saving ? "Saving…" : "Save"}
                   </button>
                   <button
                     type="button"
                     onClick={() => deleteRow(rule.id)}
-                    className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
+                    className="rounded-xl border border-red-200 px-4 py-2 text-sm font-bold text-red-700 hover:bg-red-50"
                   >
                     Remove
                   </button>
                 </div>
               </div>
-              {rule.error && <p className="text-xs text-red-600">{rule.error}</p>}
+              {rule.error && <p className="text-xs font-bold text-red-700">{rule.error}</p>}
             </li>
           ))}
         </ul>
       </div>
 
-      <form onSubmit={addElement} className="space-y-3 rounded-lg border border-dashed border-neutral-300 p-4">
-        <h2 className="text-sm font-medium">Add a new element</h2>
+      <form onSubmit={addElement} className="space-y-3 rounded-2xl border-2 border-dashed border-brand-200 bg-white/60 p-5">
+        <h2 className="font-extrabold text-brand-950">Add a new element</h2>
         <div className="grid grid-cols-2 gap-3">
           <input
             placeholder="key (e.g. window_decal)"
             value={newElement.key}
             onChange={(e) => setNewElement((n) => ({ ...n, key: e.target.value }))}
-            className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+            className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100"
           />
           <input
             placeholder="Label (e.g. Window decal)"
             value={newElement.label}
             onChange={(e) => setNewElement((n) => ({ ...n, label: e.target.value }))}
-            className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+            className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100"
           />
         </div>
         <textarea
@@ -193,9 +193,9 @@ export function MatrixEditor({ initialRules }: { initialRules: MatrixElementRule
           value={newElement.description}
           onChange={(e) => setNewElement((n) => ({ ...n, description: e.target.value }))}
           rows={2}
-          className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+          className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100"
         />
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <input
             type="number"
             step="0.25"
@@ -203,7 +203,7 @@ export function MatrixEditor({ initialRules }: { initialRules: MatrixElementRule
             placeholder="Points / unit"
             value={newElement.pointsPerUnit}
             onChange={(e) => setNewElement((n) => ({ ...n, pointsPerUnit: e.target.value }))}
-            className="w-32 rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+            className="w-32 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100"
           />
           <input
             type="number"
@@ -212,12 +212,12 @@ export function MatrixEditor({ initialRules }: { initialRules: MatrixElementRule
             placeholder="Max units"
             value={newElement.maxUnits}
             onChange={(e) => setNewElement((n) => ({ ...n, maxUnits: e.target.value }))}
-            className="w-28 rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+            className="w-28 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100"
           />
           <button
             type="submit"
             disabled={adding}
-            className="ml-auto rounded-md bg-brand-700 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-800 disabled:opacity-50"
+            className="ml-auto rounded-xl bg-brand-700 px-4 py-2 text-sm font-bold text-white hover:bg-brand-800 disabled:opacity-50"
           >
             {adding ? "Adding…" : "Add element"}
           </button>

@@ -1,19 +1,19 @@
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+  // "native" for local dev; debian-openssl-3.0.x for the Docker image
+  // (node:22-bookworm-slim).
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  // Migrations need a direct connection; Neon's pooled URL can't hold the
-  // advisory lock `prisma migrate deploy` takes.
-  directUrl = env("DATABASE_URL_UNPOOLED")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
+// USER = field rep: submits audits, sees rankings and their own audits.
+// ADMIN = reviews/corrects scores, scores manually, manages the matrix and users.
 enum Role {
-  FIELD_REP
-  REVIEWER
+  USER
   ADMIN
 }
 
@@ -25,20 +25,39 @@ enum SubmissionStatus {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String
-  role      Role     @default(FIELD_REP)
-  createdAt DateTime @default(now())
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  role         Role      @default(USER)
+  // Null for accounts created implicitly by the old, login-less version;
+  // those cannot sign in until an admin sets a password.
+  passwordHash String?
+  active       Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
 
-  submissions      Submission[] @relation("SubmittedBy")
+  submissions         Submission[] @relation("SubmittedBy")
   reviewedSubmissions Submission[] @relation("ReviewedBy")
+  sessions            Session[]
 }
 
-// The Visibility Matrix itself — editable in-product by the Strategy &
-// Data Analytics team under /admin/matrix. `key` is what AI detections and
-// stored submission counts key off of, so renaming it effectively starts a
-// new element (old submissions keep their originally-scored breakdown).
+// Server-side sessions. The cookie holds a random token; only its SHA-256
+// is stored, so a database leak does not hand out live sessions.
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// The Visibility Matrix itself — editable in-product by admins under
+// /admin/matrix. `key` is what AI detections and stored submission counts
+// key off of, so renaming it effectively starts a new element (old
+// submissions keep their originally-scored breakdown).
 model MatrixElement {
   id            String   @id @default(cuid())
   key           String   @unique
@@ -66,40 +85,41 @@ model Shop {
 }
 
 model Submission {
-  id            String           @id @default(cuid())
-  shop          Shop             @relation(fields: [shopId], references: [id])
+  id            String  @id @default(cuid())
+  shop          Shop    @relation(fields: [shopId], references: [id])
   shopId        String
-  submittedBy   User?            @relation("SubmittedBy", fields: [submittedById], references: [id])
+  submittedBy   User?   @relation("SubmittedBy", fields: [submittedById], references: [id])
   submittedById String?
 
   imagePath     String
   latitude      Float?
   longitude     Float?
   locationLabel String?
-  capturedAt    DateTime         @default(now())
+  capturedAt    DateTime @default(now())
 
-  status        SubmissionStatus @default(PENDING)
-  aiSummary     String?
-  aiConfidence  String?
+  status       SubmissionStatus @default(PENDING)
+  aiSummary    String?
+  aiConfidence String?
 
   // Two AI-judged ratings alongside the mechanical matrix score, each out
   // of 10 with reasoning: { customerAppeal: {score,reasoning},
-  // industryStandard: {score,reasoning} }. Subjective, shop-wide (not
-  // per-operator), never editable by a reviewer — they're a second opinion
-  // to read next to the matrix score, not a number that feeds ranking.
+  // industryStandard: {score,reasoning} }. A second opinion to read next to
+  // the matrix score, not a number that feeds ranking.
   subjectiveRatings Json?
 
-  reviewedBy    User?    @relation("ReviewedBy", fields: [reviewedById], references: [id])
-  reviewedById  String?
-  reviewNotes   String?
+  reviewedBy   User?     @relation("ReviewedBy", fields: [reviewedById], references: [id])
+  reviewedById String?
+  reviewedAt   DateTime?
+  reviewNotes  String?
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  brandScores   BrandScore[]
+  brandScores BrandScore[]
 
   @@index([shopId])
   @@index([status])
+  @@index([submittedById])
 }
 
 // One operator's visibility in one audited photo. A reseller shop carries
@@ -112,13 +132,13 @@ model BrandScore {
   brand        String
 
   // What the AI counted. Null when a reviewer added a brand the AI missed.
-  aiCounts     Json?
-  aiScore      Float?
-  reasoning    Json?
+  aiCounts Json?
+  aiScore  Float?
+  reasoning Json?
 
   // What the score is based on. Equals the AI's counts until a reviewer corrects them.
-  finalCounts  Json
-  finalScore   Float
+  finalCounts Json
+  finalScore  Float
 
   @@unique([submissionId, brand])
   @@index([brand])

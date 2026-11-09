@@ -1,16 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getMatrixRules } from "@/lib/matrix";
-import { readBody } from "@/lib/read-body";
+import { readBody } from "@/lib/http";
+import { apiUser } from "@/lib/auth";
 
 const KEY_PATTERN = /^[a-z][a-z0-9_]*$/;
 
 export async function GET() {
+  const auth = await apiUser();
+  if (auth.error) return auth.error;
   const rules = await getMatrixRules();
   return NextResponse.json({ rules });
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await apiUser("ADMIN");
+  if (auth.error) return auth.error;
   const body = await readBody(req);
   if (!body) {
     return NextResponse.json({ error: "Request body must be a JSON object" }, { status: 400 });

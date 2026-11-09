@@ -1,0 +1,37 @@
+# One-command self-hosted install: app + Postgres + persistent photo storage.
+#   cp .env.example .env   # then edit it
+#   docker compose up -d --build
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: evaluator
+      POSTGRES_USER: evaluator
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evaluator -d evaluator"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://evaluator:${POSTGRES_PASSWORD}@db:5432/evaluator
+      UPLOAD_DIR: /data/uploads
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    volumes:
+      - uploads:/data
+
+volumes:
+  pgdata:
+  uploads:
