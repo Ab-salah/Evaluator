@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { maxScoreFor, type MatrixElementRule } from "@/lib/scoring";
+import { readJson } from "@/lib/read-json";
 
 type Draft = MatrixElementRule & { saving?: boolean; error?: string; dirty?: boolean };
 
@@ -38,7 +39,7 @@ export function MatrixEditor({ initialRules }: { initialRules: MatrixElementRule
           maxUnits: row.maxUnits,
         }),
       });
-      const data = await res.json();
+      const data = await readJson(res);
       if (res.status >= 400) throw new Error(data.error ?? "Could not save");
       setRules((rs) =>
         rs.map((r) => (r.id === id ? { ...r, saving: false, dirty: false, error: undefined } : r)),
@@ -54,9 +55,15 @@ export function MatrixEditor({ initialRules }: { initialRules: MatrixElementRule
     if (!confirm("Remove this element from the matrix? New submissions will no longer be scored on it.")) {
       return;
     }
-    const res = await fetch(`/api/matrix/${id}`, { method: "DELETE" });
-    if (res.ok) {
+    try {
+      const res = await fetch(`/api/matrix/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await readJson(res);
+        throw new Error(data.error ?? "Could not remove element");
+      }
       setRules((rs) => rs.filter((r) => r.id !== id));
+    } catch (err) {
+      setRules((rs) => rs.map((r) => (r.id === id ? { ...r, error: (err as Error).message } : r)));
     }
   }
 
@@ -76,7 +83,7 @@ export function MatrixEditor({ initialRules }: { initialRules: MatrixElementRule
           maxUnits: Number(newElement.maxUnits),
         }),
       });
-      const data = await res.json();
+      const data = await readJson(res);
       if (res.status >= 400) throw new Error(data.error ?? "Could not add element");
       setRules((rs) => [...rs, data.element]);
       setNewElement({ key: "", label: "", description: "", pointsPerUnit: "", maxUnits: "" });
