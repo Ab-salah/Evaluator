@@ -20,7 +20,7 @@ export type OperatorRow = {
   bestShop: { name: string; score: number };
   worstShop: { name: string; score: number };
   // Average count per matrix element, over shops that carry this operator
-  // (not the whole shop list) — the basis for "what needs the most work".
+  // (not the whole shop list): the basis for "what needs the most work".
   avgCounts: ElementCounts;
 };
 

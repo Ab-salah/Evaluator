@@ -15,7 +15,7 @@ export default async function AccountPage() {
           {[
             ["Name", user.name],
             ["Email", user.email],
-            ["Role", user.role === "ADMIN" ? "Admin — reviews scores, manages the matrix and users" : "Field user — submits audits"],
+            ["Role", user.role === "ADMIN" ? "Admin: reviews scores, manages the matrix and users" : "Field user: submits audits"],
           ].map(([k, v]) => (
             <div key={k} className="flex gap-4 px-4 py-3 sm:px-5">
               <dt className="w-16 shrink-0 font-bold text-neutral-500">{k}</dt>

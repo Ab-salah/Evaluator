@@ -8,10 +8,10 @@ import { exportCrop, renderRotated } from "@/lib/photo";
 
 const FULL: PercentCrop = { unit: "%", x: 0, y: 0, width: 100, height: 100 };
 // The selection shown by default is inset a few percent from the edges so
-// every handle — including the top/bottom ones — starts clear of the image
+// every handle (including the top and bottom ones) starts clear of the image
 // border and is easy to grab on a touchscreen. But if the rep never
 // actually drags a handle, "Use photo" must still export the FULL photo,
-// not this inset default — otherwise every untouched submission silently
+// not this inset default. Otherwise every untouched submission silently
 // loses a sliver around the edges.
 const DEFAULT_CROP: PercentCrop = { unit: "%", x: 3, y: 3, width: 94, height: 94 };
 
@@ -59,7 +59,7 @@ export function PhotoEditor({
     setError(null);
     try {
       // Only export the inset selection once the rep has actually dragged a
-      // handle — an untouched crop means "use the whole photo."
+      // handle; an untouched crop means "use the whole photo."
       onDone(await exportCrop(imgRef.current, touched ? crop : FULL));
     } catch (err) {
       setError((err as Error).message);

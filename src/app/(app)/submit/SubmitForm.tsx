@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { PhotoEditor } from "@/components/PhotoEditor";
@@ -27,7 +28,9 @@ function Step({ n, title, done, children }: { n: number; title: string; done: bo
   );
 }
 
-export function SubmitForm({ aiOn, knownShops }: { aiOn: boolean; knownShops: string[] }) {
+export function SubmitForm({ aiOn: aiOnAtLoad, isAdmin, knownShops }: { aiOn: boolean; isAdmin: boolean; knownShops: string[] }) {
+  // Turns false if the server reports AI was switched off after the page loaded.
+  const [aiOn, setAiOn] = useState(aiOnAtLoad);
   const router = useRouter();
   const [photo, setPhoto] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -84,8 +87,11 @@ export function SubmitForm({ aiOn, knownShops }: { aiOn: boolean; knownShops: st
       } else if (data.shopName) {
         setShopName(data.shopName);
         setNameStatus("found");
+      } else if (data.aiDisabled) {
+        setAiOn(false);
+        setNameStatus("idle");
       } else {
-        setNameStatus(data.aiDisabled ? "idle" : "not-found");
+        setNameStatus("not-found");
       }
     } catch (err) {
       if (version === photoVersion.current) {
@@ -136,15 +142,32 @@ export function SubmitForm({ aiOn, knownShops }: { aiOn: boolean; knownShops: st
     ),
     found: (
       <span className="inline-flex items-center gap-1.5 text-emerald-700">
-        <Icon name="sparkles" className="h-3.5 w-3.5" /> Read from the sign — edit it if it&apos;s wrong.
+        <Icon name="sparkles" className="h-3.5 w-3.5" /> Read from the sign. Edit it if it&apos;s wrong.
       </span>
     ),
-    "not-found": <span className="text-amber-700">No name is legible on the sign — type it in, or leave it for the admin.</span>,
+    "not-found": <span className="text-amber-700">No name is legible on the sign. Type it in, or leave it for the admin.</span>,
     error: null,
   };
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
+      {!aiOn && (
+        <Notice
+          tone="warn"
+          title="AI is switched off"
+          action={
+            isAdmin && (
+              <Link href="/admin/settings" className={btn.primary}>
+                Add API key
+              </Link>
+            )
+          }
+        >
+          {isAdmin
+            ? "No API key has been added yet, so the shop name can't be read from the photo and scoring will be manual."
+            : "The shop name can't be read automatically right now. Type it in below; an admin will score the photo."}
+        </Notice>
+      )}
       <Step n={1} title="Shop photo" done={!!photo}>
         {preview ? (
           <div className="overflow-hidden rounded-2xl border border-neutral-200">
@@ -230,7 +253,7 @@ export function SubmitForm({ aiOn, knownShops }: { aiOn: boolean; knownShops: st
                     )
                   }
                 >
-                  {nameError} You can type it, or submit anyway — scoring reads the sign again.
+                  {nameError} You can type it, or submit anyway and scoring will read the sign again.
                 </Notice>
               </div>
             ) : (
@@ -306,7 +329,7 @@ export function SubmitForm({ aiOn, knownShops }: { aiOn: boolean; knownShops: st
       </div>
       <p className="text-center text-xs text-neutral-400">
         {aiOn
-          ? "Scoring runs in the background — you can start the next audit straight away."
+          ? "Scoring runs in the background, so you can start the next audit straight away."
           : "AI scoring is off on this server, so an admin will score this photo."}
       </p>
     </form>

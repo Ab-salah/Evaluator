@@ -31,7 +31,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           </h1>
           <p className="mt-4 hidden text-base text-white/75 sm:block">
             Every operator&apos;s branding is counted against the Visibility Matrix and ranked the same way, every
-            time — no more subjective, manual scoring.
+            time. No more subjective, manual scoring.
           </p>
         </div>
         <div className="relative mt-10 hidden gap-2 lg:flex">

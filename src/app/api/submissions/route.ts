@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
   const longitude = optionalCoordinate(form.get("longitude"), 180);
   const image = form.get("image");
 
-  if (!shopName && !aiEnabled()) return bad("Enter the shop's name.");
+  if (!shopName && !(await aiEnabled())) return bad("Enter the shop's name.");
   if (latitude === null || longitude === null) return bad("latitude/longitude must be valid coordinates");
   if (!(image instanceof File)) return bad("Add a photo of the shop front.");
   if (!isSupportedMediaType(image.type)) return bad(`Unsupported image type: ${image.type}. Use JPEG, PNG or WebP.`);

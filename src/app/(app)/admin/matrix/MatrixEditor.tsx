@@ -189,7 +189,7 @@ export function MatrixEditor({ initialRules }: { initialRules: MatrixElementRule
           />
         </div>
         <textarea
-          placeholder="Description — what the AI should look for"
+          placeholder="Description: what the AI should look for"
           value={newElement.description}
           onChange={(e) => setNewElement((n) => ({ ...n, description: e.target.value }))}
           rows={2}

@@ -63,7 +63,7 @@ export default async function SubmissionPage({
     submission.latitude != null && submission.longitude != null
       ? `https://www.google.com/maps?q=${submission.latitude},${submission.longitude}`
       : null;
-  const aiOn = aiEnabled();
+  const aiOn = await aiEnabled();
 
   return (
     <div>
@@ -95,7 +95,7 @@ export default async function SubmissionPage({
               </Link>
             }
           >
-            {pending ? "It's being scored now — this page updates by itself." : "Thanks — the photo is saved."}
+            {pending ? "It's being scored now. This page updates by itself." : "Thanks, the photo is saved."}
           </Notice>
         </div>
       )}

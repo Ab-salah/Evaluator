@@ -73,11 +73,20 @@ password under **Account**, then add people under **Users**.
 
 ### AI scoring
 
-Set `ANTHROPIC_API_KEY` to turn on automatic scoring (model
-`claude-opus-5-5`; override with `AI_MODEL`). Without a key the app still
-works fully: every photo goes to *Manual scoring* in the review queue. The
-server needs outbound HTTPS to `api.anthropic.com`. Behind a corporate proxy,
-set `NODE_USE_ENV_PROXY=1` and `HTTPS_PROXY`.
+Sign in as an admin and open **Settings** (sidebar on desktop, account menu
+on phones). Paste the Anthropic API key, pick the model (Claude Opus 5.5 by
+default, or Sonnet 5.5 for faster, cheaper scoring) and press **Save**. The
+app tests the key straight away and shows any problem, such as a rejected key
+or a blocked network. Once a key is in, shop names are read off the sign as
+soon as a photo is added, and photos are scored automatically.
+
+You can instead set `ANTHROPIC_API_KEY` (and optionally `AI_MODEL`) in
+`.env`; a key saved in Settings takes priority. Without any key the app still
+works fully: every photo goes to *Manual scoring* in the review queue.
+
+The server needs outbound HTTPS to `api.anthropic.com`. Behind a corporate
+proxy, set `HTTPS_PROXY` in `.env` (the Docker image already sets
+`NODE_USE_ENV_PROXY=1`; without Docker, set it yourself).
 
 ## Running without Docker
 

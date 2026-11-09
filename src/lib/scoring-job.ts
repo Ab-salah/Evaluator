@@ -51,7 +51,7 @@ export async function scoreSubmission(submissionId: string): Promise<void> {
   if (!submission) return;
 
   try {
-    if (!aiEnabled()) throw new Error("AI scoring is switched off on this server — please score this photo manually.");
+    if (!(await aiEnabled())) throw new Error("AI scoring is switched off (no API key under Settings), so please score this photo manually.");
     const image = await readSubmissionImage(submission.imagePath);
     if (!image) throw new Error("The stored photo could not be found on the server.");
 

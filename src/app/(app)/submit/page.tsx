@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: "New audit" };
 export const dynamic = "force-dynamic";
 
 export default async function SubmitPage() {
-  await requireUser();
+  const user = await requireUser();
   const shops = await prisma.shop.findMany({
     where: { name: { not: UNNAMED_SHOP } },
     select: { name: true },
@@ -24,7 +24,7 @@ export default async function SubmitPage() {
         title="New audit"
         subtitle="Photograph the shop front. Every operator's branding is found and scored against the Visibility Matrix."
       />
-      <SubmitForm aiOn={aiEnabled()} knownShops={shops.map((s) => s.name)} />
+      <SubmitForm aiOn={await aiEnabled()} isAdmin={user.role === "ADMIN"} knownShops={shops.map((s) => s.name)} />
     </div>
   );
 }

@@ -253,7 +253,7 @@ export function ReviewForm({
         ) : status === "SCORED" ? (
           <div className="flex flex-col gap-2 sm:flex-row">
             <button type="button" onClick={save} disabled={saving} className={`${btn.primary} flex-1`}>
-              {saving ? <Spinner /> : <Icon name="check-circle" className="h-4 w-4" />} Counts are correct — confirm
+              {saving ? <Spinner /> : <Icon name="check-circle" className="h-4 w-4" />} Counts are correct, confirm
             </button>
             <button type="button" onClick={() => setEditing(true)} className={`${btn.secondary} flex-1`}>
               <Icon name="edit" className="h-4 w-4" /> Correct counts

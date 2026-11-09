@@ -54,7 +54,16 @@ model Session {
   @@index([userId])
 }
 
-// The Visibility Matrix itself — editable in-product by admins under
+// Server settings that admins change in the app (e.g. the AI API key under
+// /admin/settings). Values set here win over the matching environment variables.
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+}
+
+// The Visibility Matrix itself, editable in-product by admins under
 // /admin/matrix. `key` is what AI detections and stored submission counts
 // key off of, so renaming it effectively starts a new element (old
 // submissions keep their originally-scored breakdown).

@@ -3,22 +3,41 @@ import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import type { ElementCounts, MatrixElementRule } from "./scoring";
 import type { SupportedMediaType } from "./storage";
+import { getAiConfig } from "./settings";
 
 // AI is optional: without a key the app runs as a manual scoring tool and
-// admins enter counts themselves.
-export function aiEnabled(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+// admins enter counts themselves. The key and model come from
+// /admin/settings, or from ANTHROPIC_API_KEY / AI_MODEL on the server.
+export async function aiEnabled(): Promise<boolean> {
+  return Boolean((await getAiConfig()).apiKey);
 }
 
-export const AI_MODEL = process.env.AI_MODEL?.trim() || "claude-opus-5-5";
+let client: { key: string; instance: Anthropic } | null = null;
+async function getClient(): Promise<{ client: Anthropic; model: string }> {
+  const config = await getAiConfig();
+  if (!config.apiKey) {
+    throw new Error("AI scoring is switched off: no API key has been added. An admin can add one under Settings.");
+  }
+  // Rebuilt whenever the key changes, so a key saved in Settings takes
+  // effect straight away.
+  if (client?.key !== config.apiKey) {
+    client = { key: config.apiKey, instance: new Anthropic({ apiKey: config.apiKey, maxRetries: 2 }) };
+  }
+  return { client: client.instance, model: config.model };
+}
 
-let client: Anthropic | null = null;
-function getClient(): Anthropic {
-  if (!aiEnabled()) throw new Error("AI scoring is not configured (ANTHROPIC_API_KEY is not set).");
-  // Created lazily so a missing key at build time, or a key added later,
-  // never leaves a stale client behind.
-  client ??= new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: 2 });
-  return client;
+/**
+ * Checks the key and model without spending tokens: looks the model up.
+ * Returns null when everything works, otherwise a readable problem.
+ */
+export async function testAiConnection(): Promise<string | null> {
+  try {
+    const { client, model } = await getClient();
+    await client.models.retrieve(model, null, { timeout: 20_000, maxRetries: 0 });
+    return null;
+  } catch (err) {
+    return describeAiError(err);
+  }
 }
 
 // On a safety-classifier decline the API re-runs the request on a suitable
@@ -57,7 +76,7 @@ function buildSystemPrompt(rules: MatrixElementRule[], knownBrands: string[]): s
 
   return `You are a field auditor for an indirect (reseller) sales channel. You inspect one photo of a reseller shop and score the branded visibility of every operator present.
 
-Reseller shops almost always carry several operators' branding at the same time — the same storefront can show one operator's signage, another's window stickers and a third's door stickers. Identify every operator whose branding is visible, and count each operator's elements separately, attributing every element to the operator that owns it by its logo, wordmark and brand colours.
+Reseller shops almost always carry several operators' branding at the same time: the same storefront can show one operator's signage, another's window stickers and a third's door stickers. Identify every operator whose branding is visible, and count each operator's elements separately, attributing every element to the operator that owns it by its logo, wordmark and brand colours.
 
 The elements to count, per operator:
 ${rows}
@@ -66,7 +85,7 @@ Rules:
 - Return one entry in "brands" per operator visible in the photo, with its own counts for every element key. Do not list an operator whose branding is not visible.
 - Count what is physically visible in THIS photo. Do not infer elements that are out of frame, and do not count the same physical element twice or for two operators.
 - Judge each element on the definition above, not on how prominent the operator feels overall.
-- Report raw counts only — never points, scores or totals. Scoring happens outside this call.
+- Report raw counts only, never points, scores or totals. Scoring happens outside this call.
 - In each operator's "reasoning", give one short note per element counted 1 or more times, saying what you saw and where; use an empty string for elements counted 0.
 - Name operators by their brand name as written on the branding (e.g. the wordmark), not the shop's own name.${naming}
 - If the photo is blurry, dark, or too distant to judge reliably, still give your best counts and set confidence to "low".
@@ -74,9 +93,19 @@ Rules:
 Also report "shop_name". ${SHOP_NAME_RULE}
 
 Beside the matrix count, also give two independent 1-10 ratings of the shop as a whole (not tied to any one operator):
-- "customer_appeal": if an ordinary customer walked past or into this shop, how inviting, clean, organised and trustworthy would the storefront look to them? Judge lighting, clutter, tidiness and general presentation — a shop can score low here even with heavy branding if it looks crowded or run-down, and score high with minimal branding if it looks sharp and well-kept.
+- "customer_appeal": if an ordinary customer walked past or into this shop, how inviting, clean, organised and trustworthy would the storefront look to them? Judge lighting, clutter, tidiness and general presentation. A shop can score low here even with heavy branding if it looks crowded or run-down, and score high with minimal branding if it looks sharp and well-kept.
 - "industry_standard": compared to well-run reseller/retail shops in this industry generally, how does this shop's visual merchandising measure up to normal professional practice?
-For each, give the integer score and one or two sentences of reasoning grounded in what's visible in the photo.`;
+For each, give the integer score and one or two sentences of reasoning grounded in what's visible in the photo.
+
+Writing style for every text field: plain sentences, and never use em dashes or en dashes; use commas, colons or full stops instead.`;
+}
+
+/** House style: no em/en dashes in anything the AI writes. */
+function plain(text: string): string {
+  return text
+    .replace(/\s*—\s*/g, ", ")
+    .replace(/(\d)\s*–\s*(\d)/g, "$1 to $2")
+    .replace(/\s*–\s*/g, ", ");
 }
 
 function imageBlock(imageBase64: string, mediaType: SupportedMediaType) {
@@ -126,9 +155,10 @@ export async function detectBrandVisibility(params: {
     industry_standard: RatingSchema,
   });
 
-  const response = await getClient().beta.messages.parse(
+  const { client, model } = await getClient();
+  const response = await client.beta.messages.parse(
     {
-      model: AI_MODEL,
+      model,
       max_tokens: 16000,
       ...FALLBACK,
       system: buildSystemPrompt(rules, params.knownBrands),
@@ -159,13 +189,15 @@ export async function detectBrandVisibility(params: {
         return acc;
       }, {} as ElementCounts),
       reasoning: Object.fromEntries(
-        Object.entries(b.reasoning as Record<string, string>).filter(([, note]) => note.trim() !== ""),
+        Object.entries(b.reasoning as Record<string, string>)
+          .filter(([, note]) => note.trim() !== "")
+          .map(([key, note]) => [key, plain(note)]),
       ),
     })),
-    overallSummary: parsed.overall_summary,
+    overallSummary: plain(parsed.overall_summary),
     confidence: parsed.confidence,
-    customerAppeal: parsed.customer_appeal,
-    industryStandard: parsed.industry_standard,
+    customerAppeal: { ...parsed.customer_appeal, reasoning: plain(parsed.customer_appeal.reasoning) },
+    industryStandard: { ...parsed.industry_standard, reasoning: plain(parsed.industry_standard.reasoning) },
   };
 }
 
@@ -180,9 +212,10 @@ export async function readShopName(params: {
   imageBase64: string;
   mediaType: SupportedMediaType;
 }): Promise<string | null> {
-  const response = await getClient().beta.messages.parse(
+  const { client, model } = await getClient();
+  const response = await client.beta.messages.parse(
     {
-      model: AI_MODEL,
+      model,
       max_tokens: 4000,
       ...FALLBACK,
       system: `You read the trade name of a shop from a photo of its storefront. ${SHOP_NAME_RULE}`,
@@ -202,13 +235,13 @@ export async function readShopName(params: {
 
 /** Turns SDK errors into a sentence an admin can act on. */
 export function describeAiError(err: unknown): string {
-  if (err instanceof Anthropic.AuthenticationError) return "The Anthropic API key was rejected. Check ANTHROPIC_API_KEY.";
+  if (err instanceof Anthropic.AuthenticationError) return "The API key was rejected. Check the key under Settings.";
   if (err instanceof Anthropic.PermissionDeniedError) return "The Anthropic API key does not have access to this model.";
-  if (err instanceof Anthropic.NotFoundError) return `The AI model "${AI_MODEL}" was not found. Check AI_MODEL.`;
+  if (err instanceof Anthropic.NotFoundError) return "The selected AI model was not found for this API key. Pick another model under Settings.";
   if (err instanceof Anthropic.RateLimitError) return "The AI service is rate-limited right now. Try again in a minute.";
-  if (err instanceof Anthropic.APIConnectionTimeoutError) return "The AI service took too long to answer.";
+  if (err instanceof Anthropic.APIConnectionTimeoutError) return "No answer from the AI service in time. If this keeps happening, the server probably can't reach api.anthropic.com (check its internet or proxy settings).";
   if (err instanceof Anthropic.APIConnectionError) {
-    return "Could not reach the AI service (api.anthropic.com). Check the server's internet/proxy access.";
+    return "Could not reach the AI service (api.anthropic.com). The server needs internet access; behind a company proxy, set HTTPS_PROXY on the server.";
   }
   if (err instanceof Anthropic.APIError) return `AI service error (${err.status ?? "unknown"}): ${err.message}`;
   return (err as Error)?.message || "Unknown AI error.";

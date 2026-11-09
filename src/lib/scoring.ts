@@ -1,8 +1,8 @@
 /**
  * Scoring against the Visibility Matrix. The matrix itself (which elements
- * exist, their points-per-unit and caps) is data — stored in the
+ * exist, their points-per-unit and caps) is data, stored in the
  * MatrixElement table and editable by the Strategy & Data Analytics team at
- * /admin/matrix — not hardcoded here. This file only holds the arithmetic:
+ * /admin/matrix, not hardcoded here. This file only holds the arithmetic:
  * given a rule set and a photo's per-element counts, compute the score.
  * The AI detector never does this math itself (see ai-vision.ts).
  */
@@ -42,7 +42,7 @@ export function maxScoreFor(rules: MatrixElementRule[]): number {
  * Deterministic scoring: takes raw per-element unit counts (from the AI
  * detector or a human reviewer) and applies the current matrix's per-unit
  * points and caps. Counts for a key no longer present in `rules` are
- * ignored — the matrix may have changed since the photo was scored.
+ * ignored: the matrix may have changed since the photo was scored.
  */
 export function computeScore(counts: ElementCounts, rules: MatrixElementRule[]): ScoreBreakdown {
   const sortedRules = [...rules].sort((a, b) => a.sortOrder - b.sortOrder);

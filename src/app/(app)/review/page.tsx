@@ -4,9 +4,9 @@ import { requireAdmin } from "@/lib/auth";
 import { getReviewQueue } from "@/lib/review";
 import { getKnownBrands } from "@/lib/brands";
 import { brandColors } from "@/lib/brand-colors";
-import { aiEnabled, AI_MODEL } from "@/lib/ai-vision";
+import { getAiConfig, MODEL_CHOICES } from "@/lib/settings";
 import { AuditRow } from "@/components/AuditRow";
-import { Card, CardHeader, EmptyState, Icon, Notice, PageHeader } from "@/components/ui";
+import { btn, Card, CardHeader, EmptyState, Icon, Notice, PageHeader } from "@/components/ui";
 
 export const metadata: Metadata = { title: "Review queue" };
 export const dynamic = "force-dynamic";
@@ -28,7 +28,9 @@ export default async function ReviewPage({ searchParams }: { searchParams: Promi
     (TABS.find((t) => t.key === tabParam)?.key as keyof typeof lists | undefined) ??
     (queue.failed.length ? "failed" : queue.toCheck.length ? "check" : queue.inProgress.length ? "progress" : "done");
   const items = lists[tab];
-  const aiOn = aiEnabled();
+  const ai = await getAiConfig();
+  const aiOn = Boolean(ai.apiKey);
+  const modelName = MODEL_CHOICES.find((m) => m.id === ai.model)?.label ?? ai.model;
 
   return (
     <div>
@@ -39,13 +41,20 @@ export default async function ReviewPage({ searchParams }: { searchParams: Promi
 
       <div className="mb-4">
         {aiOn ? (
-          <Notice tone="info" title={`AI scoring is on (${AI_MODEL})`}>
+          <Notice tone="info" title={`AI scoring is on (${modelName})`}>
             New photos are scored automatically. Check its counts against the photo and confirm or correct them.
           </Notice>
         ) : (
-          <Notice tone="warn" title="AI scoring is off">
-            No ANTHROPIC_API_KEY is set on the server, so every photo lands in Manual scoring. Add a key to the server&apos;s
-            environment to switch automatic scoring on.
+          <Notice
+            tone="warn"
+            title="AI scoring is off"
+            action={
+              <Link href="/admin/settings" className={btn.primary}>
+                Add API key
+              </Link>
+            }
+          >
+            No API key has been added, so every photo lands in Manual scoring and shop names are not read from the sign.
           </Notice>
         )}
       </div>
@@ -87,7 +96,7 @@ export default async function ReviewPage({ searchParams }: { searchParams: Promi
             {
               check: "Scored by AI, not yet checked. Least confident first.",
               failed: "AI couldn't score these (or it's switched off). Open one and enter the counts.",
-              progress: "Being scored right now — nothing to do yet.",
+              progress: "Being scored right now. Nothing to do yet.",
               done: "The last 20 audits an admin confirmed.",
             }[tab]
           }

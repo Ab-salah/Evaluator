@@ -72,7 +72,7 @@ export async function exportCrop(image: HTMLImageElement, crop: PercentCrop): Pr
   const sy = (crop.y / 100) * image.naturalHeight;
   const sw = (crop.width / 100) * image.naturalWidth;
   const sh = (crop.height / 100) * image.naturalHeight;
-  if (sw < 1 || sh < 1) throw new Error("The crop area is empty — drag to select part of the photo.");
+  if (sw < 1 || sh < 1) throw new Error("The crop area is empty. Drag to select part of the photo.");
 
   const scale = Math.min(1, OUTPUT_MAX / Math.max(sw, sh));
   const canvas = document.createElement("canvas");

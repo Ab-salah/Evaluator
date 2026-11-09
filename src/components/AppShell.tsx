@@ -40,6 +40,13 @@ function Badge({ n }: { n?: number }) {
   );
 }
 
+// Admin pages aren't in the phone tab bar, so the account menu lists them.
+const ADMIN_LINKS: NavItem[] = [
+  { href: "/admin/matrix", label: "Visibility matrix", icon: "grid" },
+  { href: "/admin/users", label: "Users", icon: "users" },
+  { href: "/admin/settings", label: "Settings", icon: "settings" },
+];
+
 function UserMenu({ name, email, role }: { name: string; email: string; role: string }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -80,6 +87,15 @@ function UserMenu({ name, email, role }: { name: string; email: string; role: st
           <Link href="/account" onClick={() => setOpen(false)} className="flex items-center gap-2 px-4 py-2.5 font-bold text-brand-900 hover:bg-brand-50">
             <Icon name="key" className="h-4 w-4" /> Account & password
           </Link>
+          {role === "ADMIN" && (
+            <div className="border-t border-neutral-100 lg:hidden">
+              {ADMIN_LINKS.map((l) => (
+                <Link key={l.href} href={l.href} onClick={() => setOpen(false)} className="flex items-center gap-2 px-4 py-2.5 font-bold text-brand-900 hover:bg-brand-50">
+                  <Icon name={l.icon} className="h-4 w-4" /> {l.label}
+                </Link>
+              ))}
+            </div>
+          )}
           <form action={logout}>
             <button className="flex w-full items-center gap-2 px-4 py-2.5 text-left font-bold text-red-700 hover:bg-red-50">
               <Icon name="logout" className="h-4 w-4" /> Sign out
@@ -109,12 +125,7 @@ export function AppShell({
     { href: "/audits", label: isAdmin ? "All audits" : "My audits", icon: "list", mobile: true },
     ...(isAdmin ? [{ href: "/review", label: "Review queue", icon: "inbox" as const, badge: reviewCount, mobile: true }] : []),
   ];
-  const admin: NavItem[] = isAdmin
-    ? [
-        { href: "/admin/matrix", label: "Visibility matrix", icon: "grid" },
-        { href: "/admin/users", label: "Users", icon: "users" },
-      ]
-    : [];
+  const admin: NavItem[] = isAdmin ? ADMIN_LINKS : [];
 
   const link = (item: NavItem) => {
     const active = isActive(pathname, item.href);

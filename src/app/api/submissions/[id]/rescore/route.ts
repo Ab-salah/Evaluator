@@ -9,7 +9,7 @@ import { bad } from "@/lib/http";
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await apiUser("ADMIN");
   if (auth.error) return auth.error;
-  if (!aiEnabled()) return bad("AI scoring is not configured on this server.", 409);
+  if (!(await aiEnabled())) return bad("AI scoring is off: add an API key under Settings first.", 409);
 
   const { id } = await params;
   const updated = await prisma.submission.updateMany({ where: { id }, data: { status: "PENDING", aiSummary: null } });

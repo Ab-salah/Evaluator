@@ -126,7 +126,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
             <Kpi label="Avg. per shop" value={data.avgScore} hint="all operators combined" icon="trophy" tint="#9b4291" />
             <Kpi
               label="Leading operator"
-              value={leader?.brand ?? "—"}
+              value={leader?.brand ?? "None yet"}
               hint={leader ? `avg ${leader.avgScore} / ${maxScore}` : undefined}
               icon="sparkles"
               tint="#7f8f12"
@@ -265,7 +265,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                             ))}
                           </div>
                           <div className="mt-1 truncate text-[11px] text-neutral-500">
-                            {s.brands.map((b) => `${b.brand} ${b.score}`).join(" · ") || s.location || "—"}
+                            {s.brands.map((b) => `${b.brand} ${b.score}`).join(" · ") || s.location || ""}
                           </div>
                         </div>
                         <div className="shrink-0 text-right">

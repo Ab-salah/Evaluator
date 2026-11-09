@@ -3,9 +3,9 @@ import { STUCK_AFTER_MS } from "./scoring-job";
 
 /**
  * What an admin has to act on:
- *  - FLAGGED: AI scoring failed (or is off) — needs manual scoring
- *  - stuck PENDING: scoring never finished (e.g. server restart) — re-run AI
- *  - SCORED: AI scored it, nobody has checked it yet — confirm or correct
+ *  - FLAGGED: AI scoring failed (or is off): needs manual scoring
+ *  - stuck PENDING: scoring never finished (e.g. server restart): re-run AI
+ *  - SCORED: AI scored it, nobody has checked it yet: confirm or correct
  */
 export async function reviewQueueCount(): Promise<number> {
   const stuckBefore = new Date(Date.now() - STUCK_AFTER_MS);

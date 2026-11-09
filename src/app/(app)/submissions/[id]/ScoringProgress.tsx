@@ -61,7 +61,7 @@ export function ScoringProgress({ id }: { id: string }) {
         ))}
       </ol>
       <p className="border-t border-neutral-100 px-5 py-3 text-xs text-neutral-500">
-        You don&apos;t need to wait here — the result will be on this audit when it&apos;s done.
+        You don&apos;t need to wait here. The result will be on this audit when it&apos;s done.
       </p>
     </Card>
   );

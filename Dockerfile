@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Visibility Evaluator — production image (Next.js standalone + Prisma).
+# Visibility Evaluator: production image (Next.js standalone + Prisma).
 
 FROM node:22-bookworm-slim AS base
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
@@ -21,7 +21,8 @@ ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \
     HOSTNAME=0.0.0.0 \
-    UPLOAD_DIR=/data/uploads
+    UPLOAD_DIR=/data/uploads \
+    NODE_USE_ENV_PROXY=1
 # Prisma CLI, only for `migrate deploy` at start-up.
 RUN npm install -g prisma@6.19.3 --no-audit --no-fund && npm cache clean --force
 COPY --from=builder /app/.next/standalone ./
