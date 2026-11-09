@@ -1,15 +1,23 @@
 # Visibility Evaluator
 
-AI-scored visibility audits for indirect-channel (reseller) shops. Field reps
-photograph a shop front from their phone or laptop, the photo is scored
-automatically against the company's Visibility Matrix, and shops are ranked
-by score — replacing the manual, subjective review process.
+Reseller-shop visibility audits, scored the same way every time. Field users
+photograph a shop front from their phone or laptop; every operator's branding
+in the photo is counted against the Visibility Matrix, scored, and ranked.
+This replaces the old manual process: subjective scoring, manual effort and
+inconsistent rankings.
+
+- **Field users** sign in, take or upload a photo, and move on. Scoring runs
+  in the background.
+- **Admins** confirm or correct the AI's counts, score photos by hand when AI
+  is off or fails, edit the matrix, and manage user accounts.
+- Works on phones (bottom tab bar, camera-first flow) and on desktop
+  (sidebar, side-by-side photo and scores).
 
 ## The Visibility Matrix
 
-Scoring is fixed by the business matrix (`src/lib/scoring.ts`), not by the
-AI. The AI only counts what it sees in the photo; a deterministic function
-turns those counts into points.
+Scoring is fixed by the business matrix, not by the AI. The AI only counts
+what it sees; a deterministic function (`src/lib/scoring.ts`) turns counts
+into points.
 
 | Element | Points / unit | Max units counted | Capped max |
 |---|---|---|---|
@@ -19,72 +27,81 @@ turns those counts into points.
 | Strips | 1 | 3 | 3 |
 | Approved reseller | 0.5 | 1 | 0.5 |
 | Push/Pull | 0.25 | 1 | 0.25 |
-| **Max achievable score** | | | **35.25** |
+| **Max per operator** | | | **35.25** |
 
-Elements, labels, points-per-unit and caps are editable in-product at
-`/admin/matrix` — not just in this table — so the Strategy & Data Analytics
-team can tune the matrix without a code change.
+Admins edit elements, points and caps in-app at **Visibility matrix**.
 
-## How it works
+## How an audit flows
 
-1. **Submit** (`/submit`) — a rep takes/uploads a shop-front photo. It is
-   downscaled in the browser, and the shop's name is read off its sign to
-   prefill the form.
-2. **Score** (`POST /api/submissions`) — a reseller shop carries several
-   operators' branding at once, so a Claude vision call
-   (`src/lib/ai-vision.ts`) finds **every operator** in the photo and counts
-   each one's elements separately. `src/lib/scoring.ts` scores each operator
-   out of the full matrix (e.g. stc 10, Zain 25, Batelco 30 — each / 35.25);
-   the model never does the arithmetic itself.
-3. **Dashboard** (`/`) — operator standings (each operator's average score
-   per shop, counting shops without it as 0) and the top reseller shops,
-   ranked by total branding or by any one operator. Based on each shop's
+1. **New audit**: take or upload a photo, then crop or rotate it. The shop name
+   is read off the sign automatically, and GPS is captured quietly.
+2. **Scoring** runs in the background (`src/lib/scoring-job.ts`). Claude finds
+   **every operator** in the photo (Zain, stc, Batelco…) and counts each
+   one's elements separately. It also reads the shop name again as a safety
+   net, so a shop is never left unnamed.
+3. **Review queue** (admins) shows everything waiting on an admin:
+   - *Needs check*: AI-scored and not yet confirmed, least-confident first.
+     One tap confirms; the +/− steppers correct counts.
+   - *Manual scoring*: AI failed or is switched off. Enter the counts by hand.
+   - *Scoring now* and *Recently confirmed*.
+4. **Dashboard**: operator standings, where an operator loses points, and the
+   top shops, ranked by total or by any one operator, using each shop's
    latest audit.
-4. **Review** (`/submissions/[id]`) — per-operator breakdowns, share of
-   visibility, and the raw evaluation data. A reviewer can correct counts,
-   add an operator the AI missed or remove one it got wrong; the AI's own
-   counts are kept as an audit trail.
 
-## Stack
+## Hosting (self-hosted with Docker)
 
-- Next.js (App Router) + TypeScript + Tailwind — single deployable app,
-  server-rendered pages, API routes for scoring/review.
-- Prisma + Postgres for storage.
-- Vercel Blob (private store) for photos, served through `/api/photos`.
-- Anthropic API (Claude, vision) for element detection.
+Everything runs from one `docker compose` file: the app, PostgreSQL, and a
+volume for photos. It works on any Linux server, an Azure/AWS VM, or a laptop.
 
-## Deploying (Vercel, no local setup required)
+```bash
+cp .env.example .env      # then edit: POSTGRES_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD, ANTHROPIC_API_KEY
+docker compose up -d --build
+```
 
-1. On vercel.com, **Add New Project** → import this GitHub repo → pick the
-   branch.
-2. In the project's **Storage** tab, click **Create Database** → Postgres
-   (Neon). This sets `DATABASE_URL` and `DATABASE_URL_UNPOOLED`.
-3. Still in **Storage**, click **Create Database** → Blob (private). This
-   sets `BLOB_READ_WRITE_TOKEN`.
-4. In **Settings → Environment Variables**, add `ANTHROPIC_API_KEY` with a
-   real key from console.anthropic.com.
-5. Deploy. The build runs `prisma migrate deploy`, which creates and updates
-   the database tables itself.
+Open `http://<server>:3000` and sign in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`.
+The first admin is created automatically on that first sign-in. Change the
+password under **Account**, then add people under **Users**.
 
-Redeploys are automatic on every push to the branch.
+- Database migrations run automatically every time the container starts.
+- Photos are stored in the `uploads` volume, the database in `pgdata`.
+  Back up both.
+- Put it behind your usual HTTPS reverse proxy (nginx, IIS/ARR, Azure App
+  Gateway…) and set `APP_URL=https://…` so sign-in cookies are marked Secure.
+- Health check: `GET /api/health`.
+- To use the official Zain logo in the header, add `public/logo.svg` (or
+  `.png`) and rebuild.
 
-## Running locally
+### AI scoring
+
+Set `ANTHROPIC_API_KEY` to turn on automatic scoring (model
+`claude-opus-5-5`; override with `AI_MODEL`). Without a key the app still
+works fully: every photo goes to *Manual scoring* in the review queue. The
+server needs outbound HTTPS to `api.anthropic.com`. Behind a corporate proxy,
+set `NODE_USE_ENV_PROXY=1` and `HTTPS_PROXY`.
+
+## Running without Docker
+
+Needs Node 20.9+ and PostgreSQL.
 
 ```bash
 npm install
-cp .env.example .env   # fill in every value
-npx prisma migrate deploy
-npm run dev
+cp .env.example .env      # set DATABASE_URL, ADMIN_EMAIL, ADMIN_PASSWORD
+npm run db:migrate
+npm run dev               # or: npm run build && npm start
 ```
 
-`DATABASE_URL`/`DATABASE_URL_UNPOOLED` need a real Postgres (a free
-[neon.tech](https://neon.tech) database works); `BLOB_READ_WRITE_TOKEN`
-comes from the Vercel project's Blob store.
+## Upgrading from the Vercel version
 
-## What's intentionally not built yet
+The migration `20261109120000_auth_and_self_hosting` adds accounts and
+sessions. Accounts created implicitly by the old login-less version are kept,
+so their audits stay linked. Old field reps and reviewers become field users,
+and admins stay admins. None of them has a password yet; an admin sets one
+under **Users**. Photos stored in Vercel Blob are not copied automatically:
+download them and place them under `UPLOAD_DIR/submissions/` with the same
+file names.
 
-- **Auth** — anyone with the URL can submit or review. Fine for an internal
-  pilot; add real auth (e.g. SSO) before wider rollout.
-- **Shop/rep management UI** — shops and users are created implicitly from
-  submission form input. A dedicated admin screen can come once the pilot
-  validates the scoring flow.
+## Stack
+
+Next.js 16 (App Router, standalone output) · TypeScript · Tailwind 4 · Prisma +
+PostgreSQL · local-disk photo storage · Anthropic API (Claude vision) · Zain
+brand font and palette.

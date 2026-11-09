@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { readBody } from "@/lib/read-body";
+import { readBody } from "@/lib/http";
+import { apiUser } from "@/lib/auth";
 
 // Prisma's "record to update/delete does not exist" error.
 const isNotFound = (err: unknown) => (err as { code?: unknown } | null)?.code === "P2025";
@@ -9,6 +10,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const auth = await apiUser("ADMIN");
+  if (auth.error) return auth.error;
   const { id } = await params;
   const body = await readBody(req);
   if (!body) {
@@ -70,6 +73,8 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const auth = await apiUser("ADMIN");
+  if (auth.error) return auth.error;
   const { id } = await params;
   try {
     await prisma.matrixElement.delete({ where: { id } });

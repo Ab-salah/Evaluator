@@ -1,12 +1,10 @@
 export function RawDataPanel({ data }: { data: Record<string, unknown> }) {
   return (
-    <details className="rounded-lg border border-neutral-200 bg-white">
-      <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-neutral-600 hover:text-neutral-900">
-        Raw evaluation data
+    <details className="group rounded-2xl border border-neutral-200 bg-white">
+      <summary className="cursor-pointer list-none px-4 py-3 text-sm font-bold text-neutral-500 hover:text-brand-900">
+        <span className="mr-1 inline-block transition group-open:rotate-90">›</span> Raw evaluation data
       </summary>
-      <pre className="overflow-x-auto border-t border-neutral-200 bg-neutral-900 p-4 text-xs text-neutral-100">
-        {JSON.stringify(data, null, 2)}
-      </pre>
+      <pre className="max-h-96 overflow-auto rounded-b-2xl bg-brand-950 p-4 text-xs text-brand-100">{JSON.stringify(data, null, 2)}</pre>
     </details>
   );
 }

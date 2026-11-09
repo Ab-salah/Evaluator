@@ -1,25 +1,18 @@
-import { NextRequest, NextResponse } from "next/server";
-import { get } from "@vercel/blob";
-import { PHOTO_PREFIX } from "@/lib/storage";
+import { NextRequest } from "next/server";
+import { apiUser } from "@/lib/auth";
+import { readSubmissionImage } from "@/lib/storage";
 
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: Promise<{ path: string[] }> },
-) {
-  const pathname = (await params).path.join("/");
-  if (!pathname.startsWith(PHOTO_PREFIX)) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+  const auth = await apiUser();
+  if (auth.error) return auth.error;
 
-  const result = await get(pathname, { access: "private" });
-  if (!result || result.statusCode !== 200) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
+  const image = await readSubmissionImage((await params).path.join("/"));
+  if (!image) return Response.json({ error: "Not found" }, { status: 404 });
 
-  return new NextResponse(result.stream, {
+  return new Response(new Uint8Array(image.buffer), {
     headers: {
-      "Content-Type": result.blob.contentType,
-      // Photo paths are random UUIDs and never overwritten, so they can be cached forever.
+      "Content-Type": image.mediaType,
+      // Photo paths are random UUIDs and never overwritten.
       "Cache-Control": "private, max-age=31536000, immutable",
     },
   });

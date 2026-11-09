@@ -1,32 +1,97 @@
 @import "tailwindcss";
 
 /*
- * Light-only by design. The old unlayered `body { background; color }` rule
- * (plus a dark-mode override of it) beat Tailwind's layered utilities, so it
- * replaced the body's bg-neutral-50 and, on dark-mode devices, painted light
- * text onto the white cards, making them unreadable. Colours now come only
- * from the utilities on <body>.
+ * Light theme built on the Zain brand palette. Colours come only from
+ * Tailwind utilities (no unlayered body rules), so nothing overrides them.
  */
 :root {
-  --background: #fafafa;
-  --foreground: #171717;
   color-scheme: light;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --font-sans: var(--font-zain), ui-sans-serif, system-ui, "Segoe UI", Tahoma, sans-serif;
 
-  /* Brand palette, from the company's own slide deck. */
-  --color-brand-950: #00204f;
-  --color-brand-900: #00348a;
-  --color-brand-800: #0d4aa8;
-  --color-brand-700: #1c74cf;
-  --color-brand-500: #4a8bcf;
-  --color-brand-300: #6fc7ea;
-  --color-brand-100: #eaf3fd;
-  --color-brand-50: #f4f8fe;
-  --color-gold-600: #c99a13;
-  --color-gold-500: #f4c32a;
-  --color-gold-100: #fff3c8;
+  /* Zain brand palette */
+  --color-zain-navy: #281f51;
+  --color-zain-blue: #344c98;
+  --color-zain-royal: #0550a5;
+  --color-zain-teal: #23aeb7;
+  --color-zain-sky: #6fc7ea;
+  --color-zain-lime: #c3d534;
+  --color-zain-yellow: #f6eb69;
+  --color-zain-pink: #e27faf;
+  --color-zain-magenta: #ab1368;
+  --color-zain-purple: #9b4291;
+  --color-zain-deep: #034146;
+  --color-zain-plum: #442c43;
+
+  /* Interface scale derived from Zain navy/blue, for text, actions and tints. */
+  --color-brand-950: #1a1438;
+  --color-brand-900: #281f51;
+  --color-brand-800: #2d3a7c;
+  --color-brand-700: #344c98;
+  --color-brand-600: #4560b0;
+  --color-brand-500: #6b7fc4;
+  --color-brand-200: #d5dbf0;
+  --color-brand-100: #e8ecf8;
+  --color-brand-50: #f4f6fc;
+
+  --color-canvas: #f5f6fa;
+}
+
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+@utility bg-midnight {
+  background-image: linear-gradient(160deg, #0550a5 0%, #172a7a 45%, #10064a 100%);
+}
+
+@utility bg-zain-pattern {
+  background-image: url("/brand/pattern-light.png");
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+/* Bottom tab bar clears the iPhone home indicator. */
+@utility pb-safe {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@utility animate-rise {
+  animation: rise 0.35s ease-out both;
+}
+
+@keyframes grow-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@utility animate-grow {
+  transform-origin: left;
+  animation: grow-x 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise,
+  .animate-grow,
+  .animate-spin,
+  .animate-pulse {
+    animation: none !important;
+  }
 }
