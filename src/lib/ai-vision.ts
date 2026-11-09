@@ -3,7 +3,14 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import type { ElementCounts, MatrixElementRule } from "./scoring";
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+// Kept under the API routes' maxDuration, so a slow or hung call fails into
+// the FLAGGED path instead of the platform killing the function and leaving
+// the submission stuck in PENDING.
+const client = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+  timeout: 240_000,
+  maxRetries: 1,
+});
 
 type MediaType = "image/jpeg" | "image/png" | "image/webp";
 
@@ -44,7 +51,7 @@ Rules:
 - Count what is physically visible in THIS photo. Do not infer elements that are out of frame, and do not count the same physical element twice or for two operators.
 - Judge each element on the definition above, not on how prominent the operator feels overall.
 - Report raw counts only — never points, scores or totals. Scoring happens outside this call.
-- In each operator's "reasoning", add one short note per element counted 1 or more times, saying what you saw and where.
+- In each operator's "reasoning", give one short note per element counted 1 or more times, saying what you saw and where; use an empty string for elements counted 0.
 - Name operators by their brand name as written on the branding (e.g. the wordmark), not the shop's own name.${naming}
 - If the photo is blurry, dark, or too distant to judge reliably, still give your best counts and set confidence to "low".
 
@@ -71,6 +78,18 @@ export async function detectBrandVisibility(params: {
     ),
   );
 
+  // One note per element key. A free-form record can't be used here:
+  // structured outputs compile it to an object with no allowed properties,
+  // so the model could only ever return {} and every note was lost.
+  const ReasoningSchema = z.object(
+    Object.fromEntries(
+      rules.map((rule) => [
+        rule.key,
+        z.string().describe(`What was seen for "${rule.label}" and where; empty string if none.`),
+      ]),
+    ),
+  );
+
   const RatingSchema = z.object({
     score: z.number().int().min(1).max(10),
     reasoning: z.string(),
@@ -81,7 +100,7 @@ export async function detectBrandVisibility(params: {
       z.object({
         brand: z.string(),
         counts: CountsSchema,
-        reasoning: z.record(z.string(), z.string()),
+        reasoning: ReasoningSchema,
       }),
     ),
     overall_summary: z.string(),
@@ -124,7 +143,9 @@ export async function detectBrandVisibility(params: {
         acc[rule.key] = Math.max(0, Math.round(b.counts[rule.key] ?? 0));
         return acc;
       }, {} as ElementCounts),
-      reasoning: b.reasoning,
+      reasoning: Object.fromEntries(
+        Object.entries(b.reasoning as Record<string, string>).filter(([, note]) => note.trim() !== ""),
+      ),
     })),
     overallSummary: parsed.overall_summary,
     confidence: parsed.confidence,
@@ -167,7 +188,7 @@ export async function readShopName(params: {
       },
     ],
     output_config: { format: zodOutputFormat(ShopNameSchema), effort: "low" },
-  });
+  }, { timeout: 50_000 });
 
   const name = response.parsed_output?.shop_name?.trim();
   return name ? name : null;
