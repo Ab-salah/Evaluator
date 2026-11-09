@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { computeScore, type ElementCounts } from "@/lib/scoring";
 import { getMatrixRules } from "@/lib/matrix";
 import { canonicalBrand, getKnownBrands } from "@/lib/brands";
+import { readBody } from "@/lib/read-body";
 
 export async function GET(
   _req: NextRequest,
@@ -29,7 +30,10 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const body = await req.json();
+  const body = await readBody(req);
+  if (!body) {
+    return NextResponse.json({ error: "Request body must be a JSON object" }, { status: 400 });
+  }
 
   const reviewerEmail = String(body.reviewerEmail ?? "").trim();
   const reviewerName = String(body.reviewerName ?? "").trim();
@@ -50,9 +54,10 @@ export async function PATCH(
     if (!name) {
       return NextResponse.json({ error: "Every operator needs a name" }, { status: 400 });
     }
-    if (!rules.every((r) => typeof entry.counts?.[r.key] === "number")) {
+    const counts = entry.counts as Record<string, unknown> | undefined;
+    if (!rules.every((r) => Number.isInteger(counts?.[r.key]) && (counts?.[r.key] as number) >= 0)) {
       return NextResponse.json(
-        { error: `Counts for ${name} must include a number for every matrix element` },
+        { error: `Counts for ${name} must include a whole number of 0 or more for every matrix element` },
         { status: 400 },
       );
     }
@@ -61,6 +66,11 @@ export async function PATCH(
       return NextResponse.json({ error: `${brand} is listed twice` }, { status: 400 });
     }
     brands.set(brand, entry.counts);
+  }
+
+  const exists = await prisma.submission.findUnique({ where: { id }, select: { id: true } });
+  if (!exists) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   const reviewer = await prisma.user.upsert({
