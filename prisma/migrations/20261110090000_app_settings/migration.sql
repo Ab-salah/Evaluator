@@ -11,5 +11,5 @@ CREATE TABLE "AppSetting" (
 -- House style: no em or en dashes in matrix text (it is shown in the app
 -- and sent to the AI as instructions).
 UPDATE "MatrixElement"
-SET "label" = REPLACE(REPLACE("label", ' — ', ', '), '–', ' to '),
-    "description" = REPLACE(REPLACE(REPLACE("description", ' — ', ', '), '—', ', '), '–', ' to ');
+SET "label" = REPLACE(REPLACE("label", ' ' || CHR(8212) || ' ', ', '), CHR(8211), ' to '),
+    "description" = REPLACE(REPLACE(REPLACE("description", ' ' || CHR(8212) || ' ', ', '), CHR(8212), ', '), CHR(8211), ' to ');

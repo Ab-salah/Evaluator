@@ -101,11 +101,13 @@ Writing style for every text field: plain sentences, and never use em dashes or 
 }
 
 /** House style: no em/en dashes in anything the AI writes. */
+const EM_DASH = String.fromCharCode(0x2014);
+const EN_DASH = String.fromCharCode(0x2013);
+const EM_RE = new RegExp(`[ ]*${EM_DASH}[ ]*`, "g");
+const EN_RANGE_RE = new RegExp(`([0-9])[ ]*${EN_DASH}[ ]*([0-9])`, "g");
+const EN_RE = new RegExp(`[ ]*${EN_DASH}[ ]*`, "g");
 function plain(text: string): string {
-  return text
-    .replace(/\s*—\s*/g, ", ")
-    .replace(/(\d)\s*–\s*(\d)/g, "$1 to $2")
-    .replace(/\s*–\s*/g, ", ");
+  return text.replace(EM_RE, ", ").replace(EN_RANGE_RE, "$1 to $2").replace(EN_RE, ", ");
 }
 
 function imageBlock(imageBase64: string, mediaType: SupportedMediaType) {
