@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { readBody } from "@/lib/read-body";
+
+// Prisma's "record to update/delete does not exist" error.
+const isNotFound = (err: unknown) => (err as { code?: unknown } | null)?.code === "P2025";
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const body = await req.json();
+  const body = await readBody(req);
+  if (!body) {
+    return NextResponse.json({ error: "Request body must be a JSON object" }, { status: 400 });
+  }
 
   const data: {
     label?: string;
@@ -39,14 +46,23 @@ export async function PATCH(
     data.maxUnits = maxUnits;
   }
   if (body.sortOrder !== undefined) {
-    data.sortOrder = Number(body.sortOrder);
+    const sortOrder = Number(body.sortOrder);
+    if (!Number.isInteger(sortOrder)) {
+      return NextResponse.json({ error: "sortOrder must be an integer" }, { status: 400 });
+    }
+    data.sortOrder = sortOrder;
   }
 
   try {
     const element = await prisma.matrixElement.update({ where: { id }, data });
     return NextResponse.json({ element });
-  } catch {
-    return NextResponse.json({ error: "Matrix element not found" }, { status: 404 });
+  } catch (err) {
+    // Only a missing row is a 404; anything else (e.g. the database being
+    // down) must surface as a real error, not be disguised as "not found".
+    if (isNotFound(err)) {
+      return NextResponse.json({ error: "Matrix element not found" }, { status: 404 });
+    }
+    throw err;
   }
 }
 
@@ -58,7 +74,12 @@ export async function DELETE(
   try {
     await prisma.matrixElement.delete({ where: { id } });
     return NextResponse.json({ ok: true });
-  } catch {
-    return NextResponse.json({ error: "Matrix element not found" }, { status: 404 });
+  } catch (err) {
+    // Only a missing row is a 404; anything else (e.g. the database being
+    // down) must surface as a real error, not be disguised as "not found".
+    if (isNotFound(err)) {
+      return NextResponse.json({ error: "Matrix element not found" }, { status: 404 });
+    }
+    throw err;
   }
 }
