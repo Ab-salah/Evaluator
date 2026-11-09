@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getMatrixRules } from "@/lib/matrix";
+import { readBody } from "@/lib/read-body";
 
 const KEY_PATTERN = /^[a-z][a-z0-9_]*$/;
 
@@ -10,7 +11,10 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
+  const body = await readBody(req);
+  if (!body) {
+    return NextResponse.json({ error: "Request body must be a JSON object" }, { status: 400 });
+  }
 
   const key = String(body.key ?? "").trim();
   const label = String(body.label ?? "").trim();

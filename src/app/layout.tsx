@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
-import fs from "fs";
-import path from "path";
 import { NavLink } from "@/components/NavLink";
 import "./globals.css";
 
@@ -11,21 +9,14 @@ export const metadata: Metadata = {
   description: "AI-scored reseller shop visibility audits",
 };
 
-// Drop a file at public/logo.png (or .svg) to show it in the header — no
-// code change needed. Falls back to a plain mark otherwise. Deliberately
-// not any one operator's logo by default: this app scores Zain, stc,
-// Batelco and others side by side, so branding the whole product as one
-// of them would misrepresent it to everyone else's stakeholders.
-function findLogo(): string | null {
-  for (const name of ["logo.svg", "logo.png"]) {
-    if (fs.existsSync(path.join(process.cwd(), "public", name))) return `/${name}`;
-  }
-  return null;
-}
+// Set at build time from public/logo.svg or public/logo.png (see
+// next.config.ts). Falls back to a plain mark otherwise. Deliberately not any
+// one operator's logo by default: this app scores Zain, stc, Batelco and
+// others side by side, so branding the whole product as one of them would
+// misrepresent it to everyone else's stakeholders.
+const logo = process.env.NEXT_PUBLIC_LOGO_PATH || null;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const logo = findLogo();
-
   return (
     <html lang="en">
       <body className="min-h-screen bg-neutral-50 text-neutral-900 antialiased">
@@ -33,7 +24,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
             <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
               {logo ? (
-                <Image src={logo} alt="" width={28} height={28} className="h-7 w-auto" />
+                <Image
+                  src={logo}
+                  alt=""
+                  width={28}
+                  height={28}
+                  // The optimizer refuses SVGs by default; serve them as-is.
+                  unoptimized={logo.endsWith(".svg")}
+                  className="h-7 w-auto"
+                />
               ) : (
                 <span className="flex h-7 w-7 items-center justify-center rounded-md bg-brand-700 text-sm text-white">
                   V

@@ -38,7 +38,7 @@ export function ReviewForm({
   function setCount(brand: string, key: string, value: number) {
     setSaved(false);
     setRows((rs) =>
-      rs.map((r) => (r.brand === brand ? { ...r, counts: { ...r.counts, [key]: Math.max(0, value) } } : r)),
+      rs.map((r) => (r.brand === brand ? { ...r, counts: { ...r.counts, [key]: Math.max(0, Math.round(value || 0)) } } : r)),
     );
   }
 
@@ -182,6 +182,7 @@ export function ReviewForm({
         {saved && <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">Saved.</p>}
 
         <button
+          type="button"
           onClick={onSave}
           disabled={saving}
           className="w-full rounded-lg bg-brand-700 px-3 py-2 text-sm font-medium text-white hover:bg-brand-800 disabled:opacity-50"

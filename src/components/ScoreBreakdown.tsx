@@ -6,12 +6,17 @@ export function ScoreBreakdown({
   rules,
   barClass,
   reasoning,
+  storedScore,
 }: {
   title: string;
   counts: ElementCounts;
   rules: MatrixElementRule[];
   barClass: string;
   reasoning?: Record<string, string>;
+  // The score saved when this was scored/reviewed, which the dashboard and
+  // share of visibility use. Differs from the breakdown below only if the
+  // matrix has been edited since.
+  storedScore?: number;
 }) {
   const breakdown = computeScore(counts, rules);
 
@@ -28,6 +33,12 @@ export function ScoreBreakdown({
         <div className="mt-2 h-2 overflow-hidden rounded-full bg-neutral-100">
           <div className={`h-full rounded-full ${barClass}`} style={{ width: `${breakdown.percentage}%` }} />
         </div>
+        {storedScore !== undefined && storedScore !== breakdown.totalScore && (
+          <p className="mt-2 rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-800">
+            Recorded score is {storedScore}, from the matrix in force when it was scored. The
+            breakdown here uses the current matrix; save a review to re-score it.
+          </p>
+        )}
       </div>
       <ul className="mt-3 divide-y divide-neutral-100 border-t border-neutral-100">
         {breakdown.lines.map((line) => (

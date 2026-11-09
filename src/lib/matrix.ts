@@ -60,6 +60,9 @@ async function seedDefaultMatrixIfEmpty() {
   if (count > 0) return;
   await prisma.matrixElement.createMany({
     data: DEFAULT_MATRIX.map((el, i) => ({ ...el, sortOrder: i })),
+    // Two first-ever requests can both see an empty table; without this the
+    // second one fails on the unique `key` constraint.
+    skipDuplicates: true,
   });
 }
 

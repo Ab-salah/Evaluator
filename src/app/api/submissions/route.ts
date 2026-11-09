@@ -6,7 +6,16 @@ import { canonicalBrand, getKnownBrands } from "@/lib/brands";
 import { detectBrandVisibility, type BrandDetection } from "@/lib/ai-vision";
 import { isSupportedMediaType, saveSubmissionImage } from "@/lib/storage";
 
-export const maxDuration = 60;
+// Vision scoring of a busy storefront can take well over a minute. The
+// Anthropic client times out before this, so a slow call is FLAGGED rather
+// than killed mid-request (which would leave the submission PENDING).
+export const maxDuration = 300;
+
+function optionalCoordinate(value: FormDataEntryValue | null, limit: number): number | undefined | null {
+  if (value === null || String(value).trim() === "") return undefined;
+  const n = Number(value);
+  return Number.isFinite(n) && Math.abs(n) <= limit ? n : null;
+}
 
 export async function GET(req: NextRequest) {
   const shopId = req.nextUrl.searchParams.get("shopId") ?? undefined;
@@ -48,14 +57,17 @@ export async function POST(req: NextRequest) {
   const submitterName = String(form.get("submitterName") ?? "").trim();
   const submitterEmail = String(form.get("submitterEmail") ?? "").trim();
 
-  const latitude = form.get("latitude") ? Number(form.get("latitude")) : undefined;
-  const longitude = form.get("longitude") ? Number(form.get("longitude")) : undefined;
+  const latitude = optionalCoordinate(form.get("latitude"), 90);
+  const longitude = optionalCoordinate(form.get("longitude"), 180);
   const locationLabel = String(form.get("locationLabel") ?? "").trim() || undefined;
 
   const image = form.get("image");
 
   if (!shopName) {
     return NextResponse.json({ error: "shopName is required" }, { status: 400 });
+  }
+  if (latitude === null || longitude === null) {
+    return NextResponse.json({ error: "latitude/longitude must be valid coordinates" }, { status: 400 });
   }
   if (!(image instanceof File)) {
     return NextResponse.json({ error: "image file is required" }, { status: 400 });
