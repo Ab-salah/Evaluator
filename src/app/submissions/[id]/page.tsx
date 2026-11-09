@@ -148,6 +148,7 @@ export default async function SubmissionPage({
                 counts={b.counts}
                 rules={rules}
                 reasoning={b.reasoning}
+                storedScore={b.score}
                 barClass={colors[b.brand]?.bar ?? "bg-neutral-400"}
               />
             ))
