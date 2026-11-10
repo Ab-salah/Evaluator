@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import type { Prisma } from "@prisma/client";
+import { AUDIT_STATUSES, auditWhere, parseAuditFilter } from "@/lib/audit-filter";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getKnownBrands } from "@/lib/brands";
@@ -12,13 +12,7 @@ export const metadata: Metadata = { title: "Audits" };
 export const dynamic = "force-dynamic";
 
 const PAGE = 30;
-const STATUSES = [
-  { key: "", label: "All" },
-  { key: "PENDING", label: "Scoring" },
-  { key: "SCORED", label: "Needs check" },
-  { key: "FLAGGED", label: "Manual" },
-  { key: "REVIEWED", label: "Confirmed" },
-] as const;
+const STATUSES = AUDIT_STATUSES;
 
 export default async function AuditsPage({
   searchParams,
@@ -28,25 +22,10 @@ export default async function AuditsPage({
   const user = await requireUser();
   const isAdmin = user.role === "ADMIN";
   const sp = await searchParams;
-  const q = sp.q?.trim() ?? "";
-  const status = STATUSES.some((s) => s.key === sp.status) ? sp.status! : "";
-  const mine = !isAdmin || sp.mine === "1";
+  const filter = parseAuditFilter(user, sp);
+  const { q, status, mine } = filter;
   const page = Math.max(1, Number(sp.page) || 1);
-
-  const where: Prisma.SubmissionWhereInput = {
-    ...(mine ? { submittedById: user.id } : {}),
-    ...(status ? { status: status as Prisma.EnumSubmissionStatusFilter["equals"] } : {}),
-    ...(q
-      ? {
-          OR: [
-            { shop: { name: { contains: q, mode: "insensitive" } } },
-            { shop: { city: { contains: q, mode: "insensitive" } } },
-            { shop: { code: { contains: q, mode: "insensitive" } } },
-            { brandScores: { some: { brand: { contains: q, mode: "insensitive" } } } },
-          ],
-        }
-      : {}),
-  };
+  const where = auditWhere(user, filter);
 
   const [items, count, knownBrands] = await Promise.all([
     prisma.submission.findMany({
@@ -76,9 +55,21 @@ export default async function AuditsPage({
         title={isAdmin && !mine ? "All audits" : "My audits"}
         subtitle={`${count} audit${count === 1 ? "" : "s"}${q ? ` matching “${q}”` : ""}`}
         action={
-          <Link href="/submit" className={btn.primary}>
-            <Icon name="camera" className="h-4 w-4" /> New audit
-          </Link>
+          <div className="flex gap-2">
+            {count > 0 && (
+              <a
+                href={href({ page: undefined }).replace("/audits", "/api/export")}
+                className={btn.secondary}
+                title="Download the scored audits in this list as a spreadsheet (CSV, opens in Excel)"
+                download
+              >
+                <Icon name="download" className="h-4 w-4" /> Export
+              </a>
+            )}
+            <Link href="/submit" className={btn.primary}>
+              <Icon name="camera" className="h-4 w-4" /> New audit
+            </Link>
+          </div>
         }
       />
 

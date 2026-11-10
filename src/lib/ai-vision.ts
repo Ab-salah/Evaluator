@@ -106,7 +106,7 @@ const EN_DASH = String.fromCharCode(0x2013);
 const EM_RE = new RegExp(`[ ]*${EM_DASH}[ ]*`, "g");
 const EN_RANGE_RE = new RegExp(`([0-9])[ ]*${EN_DASH}[ ]*([0-9])`, "g");
 const EN_RE = new RegExp(`[ ]*${EN_DASH}[ ]*`, "g");
-function plain(text: string): string {
+export function plain(text: string): string {
   return text.replace(EM_RE, ", ").replace(EN_RANGE_RE, "$1 to $2").replace(EN_RE, ", ");
 }
 

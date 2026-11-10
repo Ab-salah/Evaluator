@@ -175,7 +175,8 @@ export type IconName =
   | "edit"
   | "clock"
   | "key"
-  | "settings";
+  | "settings"
+  | "download";
 
 const PATHS: Record<IconName, React.ReactNode> = {
   home: <path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" />,
@@ -267,6 +268,7 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="m11 12 9-9M17 6l3 3M15 8l2 2" />
     </>
   ),
+  download: <path d="M12 4v11M7 10l5 5 5-5M4 20h16" />,
   settings: (
     <>
       <circle cx="12" cy="12" r="3" />
