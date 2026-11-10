@@ -46,7 +46,12 @@ Admins edit elements, points and caps in-app at **Visibility matrix**.
    - *Scoring now* and *Recently confirmed*.
 4. **Dashboard**: operator standings, where an operator loses points, and the
    top shops, ranked by total or by any one operator, using each shop's
-   latest audit.
+   latest audit. **Shops to win back** lists every shop where a rival
+   out-scores Zain, quickest wins first.
+5. **Zain action plan** on every scored audit: exactly what to add at that
+   shop and how many points each item is worth under the current matrix,
+   plus the fewest items that would put Zain ahead of the leading rival.
+   Set `HOME_BRAND` to plan for a different operator.
 
 ## Hosting (self-hosted with Docker)
 

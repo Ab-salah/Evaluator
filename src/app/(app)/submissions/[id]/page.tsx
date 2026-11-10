@@ -10,6 +10,8 @@ import { getKnownBrands } from "@/lib/brands";
 import { brandColors, colorFor } from "@/lib/brand-colors";
 import { isStuck, UNNAMED_SHOP } from "@/lib/scoring-job";
 import { ScoreBreakdown } from "@/components/ScoreBreakdown";
+import { ActionPlanCard } from "@/components/ActionPlanCard";
+import { actionPlan } from "@/lib/action-plan";
 import { RatingsSummary } from "@/components/RatingsSummary";
 import { StatusBadge } from "@/components/StatusBadge";
 import { RawDataPanel } from "@/components/RawDataPanel";
@@ -64,6 +66,8 @@ export default async function SubmissionPage({
       ? `https://www.google.com/maps?q=${submission.latitude},${submission.longitude}`
       : null;
   const aiOn = await aiEnabled();
+  // Only once there is a result to plan from.
+  const plan = submission.status === "SCORED" || submission.status === "REVIEWED" ? actionPlan(brands, rules) : null;
 
   return (
     <div>
@@ -213,6 +217,8 @@ export default async function SubmissionPage({
               </EmptyState>
             </Card>
           )}
+
+          {plan && <ActionPlanCard plan={plan} color={colorFor(colors, plan.brand)} />}
 
           {isAdmin && !(pending && !stuck) && (
             <ReviewForm

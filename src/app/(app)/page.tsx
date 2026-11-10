@@ -8,6 +8,7 @@ import { brandColors, colorFor } from "@/lib/brand-colors";
 import { getKnownBrands } from "@/lib/brands";
 import { reviewQueueCount } from "@/lib/review";
 import { AuditRow } from "@/components/AuditRow";
+import { actionPlan, HOME_BRAND } from "@/lib/action-plan";
 import { btn, Card, CardHeader, EmptyState, Icon, Photo, type IconName } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -76,6 +77,17 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         })
         .sort((a, b) => b.gap - a.gap)
     : [];
+
+  // Shops where a rival out-scores the home brand, easiest to win back first:
+  // fewest items to add, then smallest gap. Shops that can't be flipped go last.
+  const winBack = data.shops
+    .map((s) => ({ shop: s, plan: actionPlan(s.brands, rules) }))
+    .filter(({ plan }) => !plan.leading)
+    .sort(
+      (a, b) =>
+        (a.plan.toLead ? a.plan.toLead.reduce((n, t) => n + t.add, 0) : 999) -
+          (b.plan.toLead ? b.plan.toLead.reduce((n, t) => n + t.add, 0) : 999) || a.plan.gapToLead - b.plan.gapToLead,
+    );
 
   return (
     <div className="space-y-5">
@@ -188,6 +200,37 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                         <div className="mt-1 h-2 overflow-hidden rounded-full bg-neutral-100">
                           <div className="h-full animate-grow rounded-full" style={{ width: `${g.pct}%`, background: g.pct < 40 ? "#ab1368" : colorFor(colors, selected.brand) }} />
                         </div>
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              )}
+
+              {winBack.length > 0 && (
+                <Card>
+                  <CardHeader
+                    title={`Shops to win back for ${HOME_BRAND}`}
+                    subtitle={`${winBack.length} shop${winBack.length === 1 ? "" : "s"} where a rival out-scores ${HOME_BRAND}. Quickest wins first.`}
+                  />
+                  <ul className="divide-y divide-neutral-100">
+                    {winBack.slice(0, 6).map(({ shop, plan }) => (
+                      <li key={shop.shopId}>
+                        <Link href={`/submissions/${shop.submissionId}`} className="flex items-center gap-3 px-4 py-3 transition hover:bg-brand-50/60 sm:px-5">
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate font-bold text-brand-950">{shop.shopName}</div>
+                            <div className="mt-0.5 text-xs text-neutral-500">
+                              {plan.present ? `${HOME_BRAND} ${plan.score}` : `No ${HOME_BRAND}`} vs {plan.rival!.brand} {plan.rival!.score}
+                            </div>
+                            <div className="mt-1 text-xs font-bold text-emerald-700">
+                              {plan.toLead
+                                ? `Add ${plan.toLead.map((t) => `${t.add} × ${t.label}`).join(", ")}`
+                                : "Can't overtake with the matrix as it is"}
+                            </div>
+                          </div>
+                          <span className="shrink-0 rounded-full bg-red-50 px-2.5 py-1 text-xs font-extrabold tabular-nums text-red-700">
+                            -{plan.gapToLead}
+                          </span>
+                        </Link>
                       </li>
                     ))}
                   </ul>

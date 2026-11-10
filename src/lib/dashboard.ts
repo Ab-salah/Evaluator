@@ -9,7 +9,7 @@ export type ShopRow = {
   imagePath: string;
   capturedAt: Date;
   status: string;
-  brands: { brand: string; score: number }[];
+  brands: { brand: string; score: number; counts: ElementCounts }[];
   total: number;
 };
 
@@ -61,7 +61,7 @@ export async function getDashboardData(): Promise<DashboardData> {
 
   const shops: ShopRow[] = [...latestPerShop.values()].map((s) => {
     const brands = s.brandScores
-      .map((b) => ({ brand: b.brand, score: b.finalScore }))
+      .map((b) => ({ brand: b.brand, score: b.finalScore, counts: (b.finalCounts as ElementCounts | null) ?? {} }))
       .sort((a, b) => b.score - a.score);
     return {
       shopId: s.shopId,
