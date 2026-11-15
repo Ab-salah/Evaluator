@@ -13,6 +13,31 @@ inconsistent rankings.
 - Works on phones (bottom tab bar, camera-first flow) and on desktop
   (sidebar, side-by-side photo and scores).
 
+## Try the demo
+
+The quickest way to see everything working, with no Docker, database or API
+key: it starts an embedded database, loads 13 sample shops with 19 audits,
+and simulates the AI.
+
+```bash
+npm install
+npm run demo
+```
+
+Open http://localhost:3000 and sign in with one click as the demo admin
+(Noor Hassan) or a field rep (Ali Ahmed). Every demo account uses the
+password `demo1234`. On **New audit**, pick one of the sample shop photos:
+the simulated AI reads the shop's name and scores it exactly as drawn. Your
+own photos also work; they get a realistic but made-up result.
+
+- Demo data is kept in `.demo/` between runs. Start again from scratch with
+  `npm run demo -- --reset`, or use **Reset demo data** under Settings.
+- `npm run demo -- --port=4000` picks another port; `--open` opens the browser.
+- With Docker, set `DEMO_MODE=true` in `.env` instead. Never turn demo mode
+  on for real audits: it replaces the AI with a simulation.
+- The sample photos in `public/demo/` are drawn from
+  `src/lib/demo/catalog.ts` by `npm run demo:photos`.
+
 ## The Visibility Matrix
 
 Scoring is fixed by the business matrix, not by the AI. The AI only counts
@@ -44,11 +69,16 @@ Admins edit elements, points and caps in-app at **Visibility matrix**.
      One tap confirms; the +/− steppers correct counts.
    - *Manual scoring*: AI failed or is switched off. Enter the counts by hand.
    - *Scoring now* and *Recently confirmed*.
-4. **Dashboard**: operator standings, where an operator loses points, and the
-   top shops, ranked by total or by any one operator, using each shop's
-   latest audit. **Shops to win back** lists every shop where a rival
-   out-scores Zain, quickest wins first.
-5. **Zain action plan** on every scored audit: exactly what to add at that
+4. **Dashboard**: operator standings and how they moved week by week, where
+   an operator loses points, and the top shops, ranked by total or by any one
+   operator, using each shop's latest audit. **Shops to win back** lists
+   every shop where a rival out-scores Zain, quickest wins first.
+5. **Shops**: every audited shop with Zain's score, the change since its
+   previous audit and who leads there, filterable by "Zain leads", "Zain
+   behind" and "No Zain". Each shop has its own page with the latest photo,
+   its action plan, a score history chart and every audit, plus **Audit
+   again** to re-photograph it with its details filled in.
+6. **Zain action plan** on every scored audit: exactly what to add at that
    shop and how many points each item is worth under the current matrix,
    plus the fewest items that would put Zain ahead of the leading rival.
    Set `HOME_BRAND` to plan for a different operator.

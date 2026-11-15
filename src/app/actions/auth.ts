@@ -4,6 +4,9 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { createSession, destroySession, ensureBootstrapAdmin, getCurrentUser } from "@/lib/auth";
 import { hashPassword, passwordProblem, verifyPassword } from "@/lib/password";
+import { DEMO_MODE } from "@/lib/demo/mode";
+import { DEMO_USERS } from "@/lib/demo/catalog";
+import { ensureDemoData } from "@/lib/demo/seed";
 
 export type FormState = { error?: string; ok?: string } | undefined;
 
@@ -19,6 +22,7 @@ export async function login(_prev: FormState, form: FormData): Promise<FormState
   if (!email || !password) return { error: "Enter your email and password." };
 
   await ensureBootstrapAdmin();
+  await ensureDemoData();
   const user = await prisma.user.findUnique({ where: { email } });
   // Same message for unknown email and wrong password, so accounts can't be probed.
   if (!user || !(await verifyPassword(password, user.passwordHash))) {
@@ -26,6 +30,19 @@ export async function login(_prev: FormState, form: FormData): Promise<FormState
   }
   if (!user.active) return { error: "This account has been deactivated. Ask an admin to re-enable it." };
 
+  await createSession(user.id);
+  redirect(safeNext(form.get("next")));
+}
+
+/** Demo mode only: one-click sign-in as one of the demo accounts. */
+export async function demoLogin(_prev: FormState, form: FormData): Promise<FormState> {
+  if (!DEMO_MODE) return { error: "Demo sign-in is only available in demo mode." };
+  const email = String(form.get("email") ?? "");
+  if (!Object.values(DEMO_USERS).some((u) => u.email === email)) return { error: "That isn't one of the demo accounts." };
+  await ensureDemoData();
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) return { error: "That demo account no longer exists. Sign in as the admin and use Reset demo data under Settings." };
+  if (!user.active) return { error: "That demo account was deactivated. Sign in as the admin and re-enable it under Users." };
   await createSession(user.id);
   redirect(safeNext(form.get("next")));
 }

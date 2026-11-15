@@ -19,6 +19,7 @@ import { btn, Card, CardHeader, EmptyState, Icon, Notice, PageHeader, Photo } fr
 import { ReviewForm } from "./ReviewForm";
 import { ScoringProgress } from "./ScoringProgress";
 import { AdminActions } from "./AdminActions";
+import { DEMO_MODE } from "@/lib/demo/mode";
 
 export const metadata: Metadata = { title: "Audit" };
 export const dynamic = "force-dynamic";
@@ -60,7 +61,7 @@ export default async function SubmissionPage({
   const pending = submission.status === "PENDING";
   const stuck = isStuck(submission.status, submission.createdAt);
   const unnamed = submission.shop.name === UNNAMED_SHOP;
-  const location = [submission.locationLabel, submission.shop.city, submission.shop.region].filter(Boolean).join(" · ");
+  const location = [...new Set([submission.locationLabel, submission.shop.city, submission.shop.region].filter(Boolean))].join(" · ");
   const mapUrl =
     submission.latitude != null && submission.longitude != null
       ? `https://www.google.com/maps?q=${submission.latitude},${submission.longitude}`
@@ -144,7 +145,7 @@ export default async function SubmissionPage({
 
         {/* Scores */}
         <div className="space-y-4">
-          {pending && !stuck && <ScoringProgress id={submission.id} />}
+          {pending && !stuck && <ScoringProgress id={submission.id} quick={DEMO_MODE} />}
           {stuck && (
             <Notice tone="warn" title="Scoring didn't finish">
               This photo has been waiting for more than 10 minutes (the server may have restarted).

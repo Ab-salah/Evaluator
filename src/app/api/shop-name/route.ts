@@ -3,6 +3,8 @@ import { apiUser } from "@/lib/auth";
 import { aiEnabled, describeAiError, readShopName } from "@/lib/ai-vision";
 import { isSupportedMediaType } from "@/lib/storage";
 import { bad } from "@/lib/http";
+import { DEMO_MODE } from "@/lib/demo/mode";
+import { simulateShopName } from "@/lib/demo/simulate";
 
 export async function POST(req: NextRequest) {
   const auth = await apiUser();
@@ -16,7 +18,9 @@ export async function POST(req: NextRequest) {
 
   try {
     const buffer = Buffer.from(await image.arrayBuffer());
-    const shopName = await readShopName({ imageBase64: buffer.toString("base64"), mediaType: image.type });
+    const shopName = DEMO_MODE
+      ? await simulateShopName(buffer, String(form.get("demoSample") ?? ""))
+      : await readShopName({ imageBase64: buffer.toString("base64"), mediaType: image.type });
     return Response.json({ shopName });
   } catch (err) {
     console.error("[shop-name] failed:", err);

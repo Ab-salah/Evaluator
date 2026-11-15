@@ -4,12 +4,14 @@ import { z } from "zod";
 import type { ElementCounts, MatrixElementRule } from "./scoring";
 import type { SupportedMediaType } from "./storage";
 import { getAiConfig } from "./settings";
+import { DEMO_MODE } from "./demo/mode";
 
 // AI is optional: without a key the app runs as a manual scoring tool and
 // admins enter counts themselves. The key and model come from
 // /admin/settings, or from ANTHROPIC_API_KEY / AI_MODEL on the server.
+// In demo mode a simulated AI stands in, so it is always on.
 export async function aiEnabled(): Promise<boolean> {
-  return Boolean((await getAiConfig()).apiKey);
+  return DEMO_MODE || Boolean((await getAiConfig()).apiKey);
 }
 
 let client: { key: string; instance: Anthropic } | null = null;

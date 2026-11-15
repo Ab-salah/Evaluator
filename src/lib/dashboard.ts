@@ -24,13 +24,54 @@ export type OperatorRow = {
   avgCounts: ElementCounts;
 };
 
+/** Operator standings at the end of each recent week (same rules as the standings card). */
+export type Trend = { labels: string[]; series: { brand: string; values: number[] }[] };
+
 export type DashboardData = {
   shops: ShopRow[];
   operators: OperatorRow[];
   totalAudits: number;
   avgScore: number;
   awaitingReview: { id: string; shopName: string; status: string; capturedAt: Date }[];
+  trend: Trend | null;
 };
+
+const WEEK = 7 * 24 * 60 * 60 * 1000;
+
+type ScoredAudit = { shopId: string; createdAt: Date; brandScores: { brand: string; finalScore: number }[] };
+
+/**
+ * For each of the last `weeks` weeks: every operator's average score per shop,
+ * using each shop's latest scored audit as of that week's end, with shops
+ * that don't carry the operator counting as 0. The last point equals today's
+ * standings. Null until there are at least two weeks with data.
+ */
+function weeklyStandings(scored: ScoredAudit[], weeks = 8): Trend | null {
+  if (scored.length === 0) return null;
+  const now = Date.now();
+  const ends = Array.from({ length: weeks }, (_, k) => now - (weeks - 1 - k) * WEEK);
+  const oldestFirst = [...scored].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const brands = [...new Set(scored.flatMap((s) => s.brandScores.map((b) => b.brand)))];
+
+  const points = ends.map((end) => {
+    const latest = new Map<string, ScoredAudit>();
+    for (const a of oldestFirst) if (a.createdAt.getTime() <= end) latest.set(a.shopId, a);
+    if (latest.size === 0) return null;
+    const shops = [...latest.values()];
+    return Object.fromEntries(
+      brands.map((b) => [b, round(shops.reduce((sum, s) => sum + (s.brandScores.find((x) => x.brand === b)?.finalScore ?? 0), 0) / shops.length)]),
+    ) as Record<string, number>;
+  });
+  const first = points.findIndex((p) => p !== null);
+  if (first < 0 || weeks - first < 2) return null;
+
+  const tz = process.env.TZ || "Asia/Bahrain";
+  const labels = ends.slice(first).map((t) => new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: tz }));
+  const series = brands
+    .map((brand) => ({ brand, values: points.slice(first).map((p) => p![brand]) }))
+    .sort((a, b) => b.values[b.values.length - 1] - a.values[a.values.length - 1]);
+  return { labels, series };
+}
 
 const round = (n: number) => Math.round(n * 100) / 100;
 
@@ -66,7 +107,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     return {
       shopId: s.shopId,
       shopName: s.shop.name,
-      location: [s.shop.city, s.shop.region].filter(Boolean).join(" · "),
+      location: [...new Set([s.shop.city, s.shop.region].filter(Boolean))].join(" · "),
       submissionId: s.id,
       imagePath: s.imagePath,
       capturedAt: s.capturedAt,
@@ -118,6 +159,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     operators,
     totalAudits,
     avgScore,
+    trend: weeklyStandings(scored),
     awaitingReview: awaitingReview.map((s) => ({
       id: s.id,
       shopName: s.shop.name,

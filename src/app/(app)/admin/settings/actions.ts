@@ -5,6 +5,11 @@ import { getCurrentUser } from "@/lib/auth";
 import { testAiConnection } from "@/lib/ai-vision";
 import { MODEL_CHOICES, saveApiKey, saveModel } from "@/lib/settings";
 import type { FormState } from "@/app/actions/auth";
+import { DEMO_MODE } from "@/lib/demo/mode";
+import { resetDemoData } from "@/lib/demo/seed";
+import { DEMO_SHOPS } from "@/lib/demo/catalog";
+
+const DEMO_NOTE = "Demo mode is on, so scoring keeps using the simulated AI and the key isn't called. It is used once demo mode is turned off.";
 
 async function admin() {
   const me = await getCurrentUser();
@@ -30,6 +35,7 @@ export async function saveAiSettings(_prev: FormState, form: FormData): Promise<
   await saveModel(model, me.email);
   if (apiKey) await saveApiKey(apiKey, me.email);
   refresh();
+  if (DEMO_MODE) return { ok: `Saved. ${DEMO_NOTE}` };
 
   // Check straight away, so a bad key or blocked network shows up here and
   // not as a failed audit later.
@@ -40,6 +46,7 @@ export async function saveAiSettings(_prev: FormState, form: FormData): Promise<
 
 export async function testAiSettings(): Promise<FormState> {
   await admin();
+  if (DEMO_MODE) return { ok: DEMO_NOTE };
   const problem = await testAiConnection();
   return problem ? { error: problem } : { ok: "Connection works. The key and model are both accepted." };
 }
@@ -49,4 +56,14 @@ export async function removeApiKey(): Promise<FormState> {
   await saveApiKey(null, me.email);
   refresh();
   return { ok: "The key saved in the app was removed." };
+}
+
+/** Demo mode only: back to the original sample data. */
+export async function resetDemo(): Promise<FormState> {
+  const me = await admin();
+  if (!DEMO_MODE) return { error: "Demo mode is off, so there is no demo data to reset." };
+  await resetDemoData(me.id);
+  refresh();
+  const audits = DEMO_SHOPS.reduce((n, shop) => n + shop.audits.length, 0);
+  return { ok: `Demo data reset: ${DEMO_SHOPS.length} sample shops and ${audits} audits are back, and the demo accounts use their original passwords.` };
 }

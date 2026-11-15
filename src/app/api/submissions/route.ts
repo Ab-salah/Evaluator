@@ -5,6 +5,8 @@ import { aiEnabled } from "@/lib/ai-vision";
 import { isSupportedMediaType, saveSubmissionImage } from "@/lib/storage";
 import { scoreSubmission, UNNAMED_SHOP } from "@/lib/scoring-job";
 import { bad } from "@/lib/http";
+import { DEMO_MODE } from "@/lib/demo/mode";
+import { DEMO_SAMPLES } from "@/lib/demo/catalog";
 
 function optionalCoordinate(value: FormDataEntryValue | null, limit: number): number | undefined | null {
   if (value === null || String(value).trim() === "") return undefined;
@@ -13,6 +15,20 @@ function optionalCoordinate(value: FormDataEntryValue | null, limit: number): nu
 }
 
 const text = (form: FormData, key: string) => String(form.get(key) ?? "").trim() || undefined;
+
+/**
+ * The shop a typed name refers to. When exactly one shop has that name it is
+ * the same shop, code or not; when several do (e.g. branches with their own
+ * codes), only one without a code is reused, so branches never get mixed up.
+ */
+async function shopNamed(name: string) {
+  const matches = await prisma.shop.findMany({
+    where: { name: { equals: name, mode: "insensitive" } },
+    select: { id: true, code: true },
+    orderBy: { createdAt: "asc" },
+  });
+  return matches.length === 1 ? matches[0] : (matches.find((m) => m.code === null) ?? null);
+}
 
 /**
  * Saves the photo and answers straight away; AI scoring runs in the
@@ -24,7 +40,9 @@ export async function POST(req: NextRequest) {
   if (auth.error) return auth.error;
 
   const form = await req.formData();
-  const shopName = text(form, "shopName");
+  // Demo sample photos carry their shop's name, in case the field was cleared.
+  const sample = DEMO_MODE ? DEMO_SAMPLES.find((x) => x.slug === text(form, "demoSample")) : undefined;
+  const shopName = text(form, "shopName") ?? sample?.name;
   const shopCode = text(form, "shopCode");
   const region = text(form, "region");
   const city = text(form, "city");
@@ -44,8 +62,7 @@ export async function POST(req: NextRequest) {
   const shop = shopCode
     ? await prisma.shop.upsert({ where: { code: shopCode }, update: {}, create: { name, code: shopCode, region, city } })
     : shopName
-      ? ((await prisma.shop.findFirst({ where: { name: { equals: shopName, mode: "insensitive" }, code: null } })) ??
-        (await prisma.shop.create({ data: { name, region, city } })))
+      ? ((await shopNamed(shopName)) ?? (await prisma.shop.create({ data: { name, region, city } })))
       : await prisma.shop.create({ data: { name, region, city } });
 
   const submission = await prisma.submission.create({

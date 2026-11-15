@@ -10,6 +10,7 @@ import { reviewQueueCount } from "@/lib/review";
 import { AuditRow } from "@/components/AuditRow";
 import { actionPlan, HOME_BRAND } from "@/lib/action-plan";
 import { btn, Card, CardHeader, EmptyState, Icon, Photo, type IconName } from "@/components/ui";
+import { TrendChart } from "@/components/TrendChart";
 
 export const dynamic = "force-dynamic";
 
@@ -145,6 +146,22 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
             />
           </div>
 
+          {data.trend && (
+            <Card>
+              <CardHeader
+                title="Standings over time"
+                subtitle="Each operator's average score per shop at the end of each week, from every shop's latest audit at that point."
+              />
+              <div className="p-4 sm:p-5">
+                <TrendChart
+                  labels={data.trend.labels}
+                  series={data.trend.series.map((s) => ({ name: s.brand, color: colorFor(colors, s.brand), values: s.values }))}
+                  caption={`Average score per shop by week. Latest: ${data.trend.series.map((s) => `${s.brand} ${s.values[s.values.length - 1]}`).join(", ")}.`}
+                />
+              </div>
+            </Card>
+          )}
+
           <div className="grid gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
             <div className="space-y-5">
               {data.operators.length > 0 && (
@@ -211,11 +228,16 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                   <CardHeader
                     title={`Shops to win back for ${HOME_BRAND}`}
                     subtitle={`${winBack.length} shop${winBack.length === 1 ? "" : "s"} where a rival out-scores ${HOME_BRAND}. Quickest wins first.`}
+                    action={
+                      <Link href="/shops?view=behind" className={btn.ghost}>
+                        See all
+                      </Link>
+                    }
                   />
                   <ul className="divide-y divide-neutral-100">
                     {winBack.slice(0, 6).map(({ shop, plan }) => (
                       <li key={shop.shopId}>
-                        <Link href={`/submissions/${shop.submissionId}`} className="flex items-center gap-3 px-4 py-3 transition hover:bg-brand-50/60 sm:px-5">
+                        <Link href={`/shops/${shop.shopId}`} className="flex items-center gap-3 px-4 py-3 transition hover:bg-brand-50/60 sm:px-5">
                           <div className="min-w-0 flex-1">
                             <div className="truncate font-bold text-brand-950">{shop.shopName}</div>
                             <div className="mt-0.5 text-xs text-neutral-500">
@@ -282,7 +304,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                 <ol className="divide-y divide-neutral-100 pt-2">
                   {ranked.map((s, i) => (
                     <li key={s.shopId}>
-                      <Link href={`/submissions/${s.submissionId}`} className="flex items-center gap-3 px-4 py-3 transition hover:bg-brand-50/60 sm:px-5">
+                      <Link href={`/shops/${s.shopId}`} className="flex items-center gap-3 px-4 py-3 transition hover:bg-brand-50/60 sm:px-5">
                         <span
                           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-extrabold"
                           style={i < 3 ? { background: MEDALS[i], color: "#281f51" } : { background: "#f5f6fa", color: "#8a93b3" }}

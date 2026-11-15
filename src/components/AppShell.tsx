@@ -110,10 +110,12 @@ function UserMenu({ name, email, role }: { name: string; email: string; role: st
 export function AppShell({
   user,
   reviewCount,
+  demo = false,
   children,
 }: {
   user: { name: string; email: string; role: "USER" | "ADMIN" };
   reviewCount: number;
+  demo?: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -122,6 +124,7 @@ export function AppShell({
   const main: NavItem[] = [
     { href: "/", label: "Dashboard", icon: "home", mobile: true },
     { href: "/submit", label: "New audit", icon: "camera", mobile: true },
+    { href: "/shops", label: "Shops", icon: "store", mobile: true },
     { href: "/audits", label: isAdmin ? "All audits" : "My audits", icon: "list", mobile: true },
     ...(isAdmin ? [{ href: "/review", label: "Review queue", icon: "inbox" as const, badge: reviewCount, mobile: true }] : []),
   ];
@@ -145,8 +148,10 @@ export function AppShell({
     );
   };
 
-  // Phones get a bottom tab bar; matrix/users live on the dashboard for admins there.
-  const tabs = main.filter((i) => i.mobile);
+  // Phones get a bottom tab bar with the camera in the middle; admin pages
+  // are in the account menu there.
+  const order = ["/", "/shops", "/submit", "/audits", "/review"];
+  const tabs = main.filter((i) => i.mobile).sort((a, b) => order.indexOf(a.href) - order.indexOf(b.href));
 
   return (
     <div className="min-h-dvh lg:pl-64">
@@ -181,7 +186,22 @@ export function AppShell({
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-6xl px-4 pb-28 pt-5 sm:px-6 lg:px-8 lg:pb-12 lg:pt-8">{children}</main>
+      <main className="mx-auto w-full max-w-6xl px-4 pb-28 pt-5 sm:px-6 lg:px-8 lg:pb-12 lg:pt-8">
+        {demo && (
+          <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-zain-lime/70 bg-[#f8fbe3] px-3.5 py-2 text-xs text-brand-900">
+            <Icon name="sparkles" className="h-4 w-4 shrink-0 text-[#7f8f12]" />
+            <span className="min-w-0 flex-1">
+              <b>Demo mode.</b> Sample shops and simulated AI results, so you can try everything safely. None of it is real data.
+            </span>
+            {isAdmin && (
+              <Link href="/admin/settings#demo" className="shrink-0 font-bold text-brand-700 hover:underline">
+                Reset demo
+              </Link>
+            )}
+          </div>
+        )}
+        {children}
+      </main>
 
       {/* Mobile bottom tabs */}
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-neutral-200 bg-white/95 pb-safe backdrop-blur lg:hidden">

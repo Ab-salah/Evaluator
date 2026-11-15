@@ -43,3 +43,6 @@ next-env.d.ts
 
 # local photo storage
 /data
+
+# demo mode data (npm run demo)
+/.demo

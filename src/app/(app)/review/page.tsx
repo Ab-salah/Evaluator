@@ -6,6 +6,7 @@ import { getKnownBrands } from "@/lib/brands";
 import { brandColors } from "@/lib/brand-colors";
 import { getAiConfig, MODEL_CHOICES } from "@/lib/settings";
 import { AuditRow } from "@/components/AuditRow";
+import { DEMO_MODE } from "@/lib/demo/mode";
 import { btn, Card, CardHeader, EmptyState, Icon, Notice, PageHeader } from "@/components/ui";
 
 export const metadata: Metadata = { title: "Review queue" };
@@ -29,7 +30,7 @@ export default async function ReviewPage({ searchParams }: { searchParams: Promi
     (queue.failed.length ? "failed" : queue.toCheck.length ? "check" : queue.inProgress.length ? "progress" : "done");
   const items = lists[tab];
   const ai = await getAiConfig();
-  const aiOn = Boolean(ai.apiKey);
+  const aiOn = DEMO_MODE || Boolean(ai.apiKey);
   const modelName = MODEL_CHOICES.find((m) => m.id === ai.model)?.label ?? ai.model;
 
   return (
@@ -41,7 +42,7 @@ export default async function ReviewPage({ searchParams }: { searchParams: Promi
 
       <div className="mb-4">
         {aiOn ? (
-          <Notice tone="info" title={`AI scoring is on (${modelName})`}>
+          <Notice tone="info" title={DEMO_MODE ? "AI scoring is simulated (demo mode)" : `AI scoring is on (${modelName})`}>
             New photos are scored automatically. Check its counts against the photo and confirm or correct them.
           </Notice>
         ) : (

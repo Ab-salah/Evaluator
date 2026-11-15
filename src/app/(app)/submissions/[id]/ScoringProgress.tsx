@@ -7,7 +7,7 @@ import { Card, Icon, Spinner } from "@/components/ui";
 const STEPS = ["Photo uploaded", "Finding every operator's branding", "Counting signage, stickers, posters & strips", "Scoring against the matrix"];
 
 /** Polls the audit's status while AI scoring runs, and refreshes the page when it lands. */
-export function ScoringProgress({ id }: { id: string }) {
+export function ScoringProgress({ id, quick = false }: { id: string; quick?: boolean }) {
   const router = useRouter();
   const [elapsed, setElapsed] = useState(0);
 
@@ -23,16 +23,16 @@ export function ScoringProgress({ id }: { id: string }) {
       } catch {
         // Network blip: try again on the next tick.
       }
-    }, 3000);
+    }, quick ? 1500 : 3000);
     return () => {
       clearInterval(tick);
       clearInterval(poll);
     };
-  }, [id, router]);
+  }, [id, router, quick]);
 
   // Steps advance on a rough timeline so the wait feels alive; the page
   // refreshes the moment the real result is stored.
-  const active = elapsed < 2 ? 1 : elapsed < 20 ? 1 : elapsed < 45 ? 2 : 3;
+  const active = quick ? (elapsed < 3 ? 1 : elapsed < 5 ? 2 : 3) : elapsed < 20 ? 1 : elapsed < 45 ? 2 : 3;
 
   return (
     <Card className="overflow-hidden">
@@ -42,7 +42,9 @@ export function ScoringProgress({ id }: { id: string }) {
           <Spinner className="h-5 w-5 text-zain-lime" />
           <div>
             <div className="text-lg font-extrabold">Scoring this photo…</div>
-            <div className="text-xs text-white/70">Usually under a minute · {elapsed}s so far</div>
+            <div className="text-xs text-white/70">
+              {quick ? "Usually a few seconds" : "Usually under a minute"} · {elapsed}s so far
+            </div>
           </div>
         </div>
       </div>

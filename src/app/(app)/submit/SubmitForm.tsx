@@ -28,7 +28,22 @@ function Step({ n, title, done, children }: { n: number; title: string; done: bo
   );
 }
 
-export function SubmitForm({ aiOn: aiOnAtLoad, isAdmin, knownShops }: { aiOn: boolean; isAdmin: boolean; knownShops: string[] }) {
+type Sample = { slug: string; name: string; src: string };
+
+export function SubmitForm({
+  aiOn: aiOnAtLoad,
+  isAdmin,
+  knownShops,
+  samples = [],
+  shop = null,
+}: {
+  aiOn: boolean;
+  isAdmin: boolean;
+  knownShops: string[];
+  samples?: Sample[];
+  /** Re-auditing a known shop: its details are filled in. */
+  shop?: { name: string; code: string | null; city: string | null; region: string | null } | null;
+}) {
   // Turns false if the server reports AI was switched off after the page loaded.
   const [aiOn, setAiOn] = useState(aiOnAtLoad);
   const router = useRouter();
@@ -36,9 +51,12 @@ export function SubmitForm({ aiOn: aiOnAtLoad, isAdmin, knownShops }: { aiOn: bo
   const [preview, setPreview] = useState<string | null>(null);
   const [original, setOriginal] = useState<File | null>(null); // kept so it can be re-cropped
   const [editing, setEditing] = useState(false);
+  // Demo mode: which sample photo is in use, so the simulated AI knows it.
+  const [sample, setSample] = useState<string | null>(null);
+  const [loadingSample, setLoadingSample] = useState<string | null>(null);
 
-  const [shopName, setShopName] = useState("");
-  const [nameTyped, setNameTyped] = useState(false);
+  const [shopName, setShopName] = useState(shop?.name ?? "");
+  const [nameTyped, setNameTyped] = useState(Boolean(shop));
   const [nameStatus, setNameStatus] = useState<NameStatus>("idle");
   const [nameError, setNameError] = useState<string | null>(null);
   const photoVersion = useRef(0);
@@ -65,10 +83,32 @@ export function SubmitForm({ aiOn: aiOnAtLoad, isAdmin, knownShops }: { aiOn: bo
     e.target.value = "";
     if (!file) return;
     setError(null);
+    setSample(null);
     setOriginal(file);
     setEditing(true);
     // Location is captured quietly while the rep is at the shop.
     if (geo.state === "idle") captureLocation();
+  }
+
+  async function pickSample(s: Sample) {
+    setError(null);
+    setLoadingSample(s.slug);
+    try {
+      const res = await fetch(s.src);
+      if (!res.ok) throw new Error("Could not load the sample photo.");
+      const file = new File([await res.blob()], `${s.slug}.jpg`, { type: "image/jpeg" });
+      setSample(s.slug);
+      setShopName("");
+      setNameTyped(false);
+      setNameStatus("idle");
+      setOriginal(file);
+      setEditing(true);
+      if (geo.state === "idle") captureLocation();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoadingSample(null);
+    }
   }
 
   async function readName(image: File) {
@@ -77,6 +117,7 @@ export function SubmitForm({ aiOn: aiOnAtLoad, isAdmin, knownShops }: { aiOn: bo
     setNameError(null);
     const body = new FormData();
     body.set("image", image);
+    if (sample) body.set("demoSample", sample);
     try {
       const res = await fetch("/api/shop-name", { method: "POST", body });
       const data = await readJson(res);
@@ -117,6 +158,7 @@ export function SubmitForm({ aiOn: aiOnAtLoad, isAdmin, knownShops }: { aiOn: bo
     const form = new FormData(e.currentTarget);
     form.set("image", photo);
     form.set("shopName", shopName.trim());
+    if (sample) form.set("demoSample", sample);
     if (geo.state === "ok") {
       form.set("latitude", String(geo.lat));
       form.set("longitude", String(geo.lng));
@@ -201,6 +243,33 @@ export function SubmitForm({ aiOn: aiOnAtLoad, isAdmin, knownShops }: { aiOn: bo
               <span className="text-xs text-neutral-500">From gallery or files</span>
               <input type="file" accept="image/*" onChange={onPick} className="hidden" />
             </label>
+          </div>
+        )}
+        {!photo && samples.length > 0 && (
+          <div className="mt-4 rounded-2xl border border-dashed border-zain-lime bg-[#f8fbe3] p-3">
+            <div className="mb-2.5 flex items-center gap-2 text-sm font-extrabold text-brand-950">
+              <Icon name="sparkles" className="h-4 w-4 text-[#7f8f12]" /> No shop photo to hand? Try a sample
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {samples.map((s) => (
+                <button
+                  key={s.slug}
+                  type="button"
+                  onClick={() => pickSample(s)}
+                  disabled={loadingSample !== null}
+                  className="relative overflow-hidden rounded-xl border border-neutral-200 bg-white text-left transition hover:border-brand-400 hover:shadow-sm active:scale-[0.98] disabled:opacity-60"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={s.src} alt="" className="aspect-[3/2] w-full object-cover" />
+                  <span className="block truncate px-2 py-1.5 text-xs font-bold text-brand-900">{s.name}</span>
+                  {loadingSample === s.slug && (
+                    <span className="absolute inset-0 flex items-center justify-center bg-white/60">
+                      <Spinner className="h-5 w-5 text-brand-700" />
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
         )}
         {!photo && (
@@ -300,15 +369,15 @@ export function SubmitForm({ aiOn: aiOnAtLoad, isAdmin, knownShops }: { aiOn: bo
             <div className={`grid grid-cols-2 gap-3 border-t border-neutral-100 p-3.5 ${moreOpen ? "" : "hidden"}`}>
               <div>
                 <label className={label} htmlFor="shopCode">Shop code</label>
-                <input id="shopCode" name="shopCode" className={input} placeholder="RSL-0042" />
+                <input id="shopCode" name="shopCode" defaultValue={shop?.code ?? ""} className={input} placeholder="RSL-0042" />
               </div>
               <div>
                 <label className={label} htmlFor="city">City / area</label>
-                <input id="city" name="city" className={input} placeholder="Manama" />
+                <input id="city" name="city" defaultValue={shop?.city ?? ""} className={input} placeholder="Manama" />
               </div>
               <div>
                 <label className={label} htmlFor="region">Region</label>
-                <input id="region" name="region" className={input} placeholder="Capital" />
+                <input id="region" name="region" defaultValue={shop?.region ?? ""} className={input} placeholder="Capital" />
               </div>
               <div>
                 <label className={label} htmlFor="locationLabel">Location note</label>

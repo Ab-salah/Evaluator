@@ -4,6 +4,8 @@ import { getMatrixRules } from "./matrix";
 import { canonicalBrand, getKnownBrands } from "./brands";
 import { aiEnabled, describeAiError, detectBrandVisibility, type BrandDetection } from "./ai-vision";
 import { readSubmissionImage } from "./storage";
+import { DEMO_MODE } from "./demo/mode";
+import { simulateDetection } from "./demo/simulate";
 
 /** Placeholder used when a rep leaves the name blank for the AI to read. */
 export const UNNAMED_SHOP = "Unnamed shop";
@@ -47,7 +49,7 @@ async function renameUnnamedShop(submissionId: string, shopId: string, aiName: s
  * shows up in the admin review queue for manual scoring.
  */
 export async function scoreSubmission(submissionId: string): Promise<void> {
-  const submission = await prisma.submission.findUnique({ where: { id: submissionId } });
+  const submission = await prisma.submission.findUnique({ where: { id: submissionId }, include: { shop: { select: { name: true } } } });
   if (!submission) return;
 
   try {
@@ -56,12 +58,18 @@ export async function scoreSubmission(submissionId: string): Promise<void> {
     if (!image) throw new Error("The stored photo could not be found on the server.");
 
     const [rules, knownBrands] = await Promise.all([getMatrixRules(), getKnownBrands()]);
-    const detection = await detectBrandVisibility({
-      imageBase64: image.buffer.toString("base64"),
-      mediaType: image.mediaType,
-      rules,
-      knownBrands,
-    });
+    const detection = DEMO_MODE
+      ? await simulateDetection({
+          image: image.buffer,
+          shopName: submission.shop.name === UNNAMED_SHOP ? null : submission.shop.name,
+          rules,
+        })
+      : await detectBrandVisibility({
+          imageBase64: image.buffer.toString("base64"),
+          mediaType: image.mediaType,
+          rules,
+          knownBrands,
+        });
     const brands = mergeByBrand(detection.brands, knownBrands);
 
     await prisma.$transaction(async (tx) => {

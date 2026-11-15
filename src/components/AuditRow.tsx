@@ -15,7 +15,7 @@ export type AuditRowData = {
   brandScores: { brand: string; finalScore: number }[];
 };
 
-function timeAgo(d: Date) {
+export function timeAgo(d: Date) {
   const s = Math.round((Date.now() - d.getTime()) / 1000);
   if (s < 60) return "just now";
   if (s < 3600) return `${Math.floor(s / 60)} min ago`;
@@ -30,18 +30,20 @@ export function AuditRow({
   audience = "admin",
   showSubmitter = true,
   note,
+  linkable = true,
 }: {
   a: AuditRowData;
   colors: Record<string, string>;
   audience?: "admin" | "user";
   showSubmitter?: boolean;
   note?: React.ReactNode;
+  /** False for audits this user can't open (another rep's), so there is no dead link. */
+  linkable?: boolean;
 }) {
   const total = Math.round(a.brandScores.reduce((s, b) => s + b.finalScore, 0) * 100) / 100;
   const brands = [...a.brandScores].sort((x, y) => y.finalScore - x.finalScore);
-  return (
-    <li>
-      <Link href={`/submissions/${a.id}`} className="flex items-center gap-3 px-4 py-3 transition hover:bg-brand-50/60 sm:px-5">
+  const content = (
+    <>
         <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-neutral-100">
           <Photo src={a.imagePath} alt="" className="h-full w-full object-cover" />
         </div>
@@ -84,8 +86,18 @@ export function AuditRow({
             <div className="text-[11px] text-neutral-400">total pts</div>
           </div>
         )}
-        <Icon name="chevron-right" className="h-5 w-5 shrink-0 text-neutral-300" />
-      </Link>
+        {linkable && <Icon name="chevron-right" className="h-5 w-5 shrink-0 text-neutral-300" />}
+    </>
+  );
+  return (
+    <li>
+      {linkable ? (
+        <Link href={`/submissions/${a.id}`} className="flex items-center gap-3 px-4 py-3 transition hover:bg-brand-50/60 sm:px-5">
+          {content}
+        </Link>
+      ) : (
+        <div className="flex items-center gap-3 px-4 py-3 sm:px-5">{content}</div>
+      )}
     </li>
   );
 }

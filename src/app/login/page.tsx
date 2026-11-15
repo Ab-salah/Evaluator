@@ -3,6 +3,10 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { AppMark } from "@/components/ui";
 import { LoginForm } from "./LoginForm";
+import { DemoSignIn } from "./DemoSignIn";
+import { DEMO_MODE } from "@/lib/demo/mode";
+import { DEMO_PASSWORD, DEMO_USERS } from "@/lib/demo/catalog";
+import { ensureDemoData } from "@/lib/demo/seed";
 
 export const metadata: Metadata = { title: "Sign in" };
 export const dynamic = "force-dynamic";
@@ -10,6 +14,9 @@ export const dynamic = "force-dynamic";
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
   if (await getCurrentUser()) redirect("/");
   const { next } = await searchParams;
+  // Demo accounts must exist before anyone tries them.
+  await ensureDemoData();
+  const demoAccounts = DEMO_MODE ? [DEMO_USERS.noor, DEMO_USERS.ali] : [];
 
   return (
     <div className="grid min-h-dvh grid-rows-[auto_1fr] lg:grid-cols-[1.1fr_1fr] lg:grid-rows-1">
@@ -45,6 +52,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <div className="w-full max-w-sm animate-rise">
           <h2 className="text-2xl font-extrabold tracking-tight text-brand-950">Sign in</h2>
           <p className="mt-1 text-sm text-neutral-500">Use the account your admin set up for you.</p>
+          {DEMO_MODE && <DemoSignIn accounts={demoAccounts} password={DEMO_PASSWORD} next={next} />}
           <LoginForm next={next} />
           <p className="mt-8 text-center text-xs text-neutral-400">Forgot your password? Ask an admin to reset it.</p>
         </div>
